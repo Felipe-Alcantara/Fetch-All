@@ -47,6 +47,7 @@ def _run_sync() -> None:
     from rich.console import Console
     from rich.markup import escape
 
+    from fetchall.cache import load_cache
     from fetchall.config import load_config
     from fetchall.report import show_plan, show_problem_details, show_results
     from fetchall.scanner import resolve_scan_roots
@@ -55,11 +56,42 @@ def _run_sync() -> None:
     console = Console()
     config = load_config()
     roots = resolve_scan_roots(config.scan_roots)
+
+    # Cache da última varredura: permite pular a busca completa no disco.
+    cached_repos = None
+    cache = load_cache()
+    if cache and cache.matches_roots(roots):
+        repos = cache.valid_repos()
+        when = cache.scanned_at.strftime("%d/%m/%Y %H:%M")
+        mode = questionary.select(
+            "Como varrer?",
+            choices=[
+                questionary.Choice(
+                    f"⚡ Rápida — usa o cache de {when} ({len(repos)} repositórios já conhecidos)",
+                    "fast",
+                ),
+                questionary.Choice(
+                    "🔍 Completa — varre os discos de novo (encontra repositórios novos)",
+                    "full",
+                ),
+            ],
+        ).ask()
+        if mode is None:
+            return
+        if mode == "fast":
+            cached_repos = repos
+
     scope = "todos os discos locais" if not config.scan_roots else "caminhos configurados"
     # escape() impede que caminhos terminados em "\" quebrem a marcação do rich.
-    console.print(f"Varrendo {scope}: [bold]{escape(', '.join(roots))}[/bold]")
+    numbered = ", ".join(f"{i}. {root}" for i, root in enumerate(roots, start=1))
+    if cached_repos is not None:
+        console.print(
+            f"Varredura rápida: [bold]{len(cached_repos)}[/bold] repositórios do cache."
+        )
+    else:
+        console.print(f"Varrendo {scope} ({len(roots)}): [bold]{escape(numbered)}[/bold]")
     with console.status("[cyan]Procurando repositórios e fazendo fetch…[/cyan]"):
-        plan = scan_and_analyze(config)
+        plan = scan_and_analyze(config, cached_repos=cached_repos)
 
     show_plan(plan)
     show_problem_details(plan.problems)
@@ -149,9 +181,11 @@ def _status() -> None:
     except FileNotFoundError:
         git_version = "[red]git não encontrado no PATH — instale o Git[/red]"
 
+    from fetchall.cache import load_cache
     from fetchall.scanner import resolve_scan_roots
 
     config = load_config()
+    cache = load_cache()
     table = Table(title="Status do Fetch All")
     table.add_column("Item", style="bold")
     table.add_column("Valor")
@@ -160,9 +194,14 @@ def _status() -> None:
     table.add_row("Config", str(CONFIG_PATH) + ("" if CONFIG_PATH.exists() else " (ainda não criado)"))
     mode = "manual (config.json)" if config.scan_roots else "automática (todos os discos locais)"
     table.add_row("Modo de varredura", mode)
-    for root in resolve_scan_roots(config.scan_roots):
+    cache_info = (
+        f"{len(cache.repos)} repositórios em {cache.scanned_at.strftime('%d/%m/%Y %H:%M')}"
+        if cache else "(nenhuma varredura completa ainda)"
+    )
+    table.add_row("Cache da varredura", cache_info)
+    for number, root in enumerate(resolve_scan_roots(config.scan_roots), start=1):
         marker = "" if Path(root).exists() else "  ⚠ não existe"
-        table.add_row("Varredura", f"{root}{marker}")
+        table.add_row(f"Varredura {number}", f"{root}{marker}")
     console.print(table)
 
 

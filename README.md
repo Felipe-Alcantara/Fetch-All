@@ -44,9 +44,16 @@ pastas específicas e editar exclusões) e **Status/Sair**.
 Por padrão não é preciso configurar nada: com a lista de caminhos vazia, o
 programa varre todos os discos locais (fixos e removíveis). Se quiser
 restringir, use **Configurar** no menu — os caminhos ficam em `config.json`
-(ignorado pelo git por conter caminhos locais). Pastas pesadas ou de sistema
-(`node_modules`, `Windows`, `Program Files` etc.) são puladas por padrão e a
-lista de exclusões é editável.
+(ignorado pelo git por conter caminhos locais). Pastas pesadas, de sistema ou
+de ferramentas (`node_modules`, `Windows`, `Program Files`, caches de
+assistentes de IA, bibliotecas Steam etc.) são puladas por padrão e a lista
+de exclusões é editável.
+
+Após a primeira varredura completa, os repositórios encontrados ficam em um
+cache local (`scan_cache.json`, também ignorado pelo git). Nas execuções
+seguintes você escolhe entre a varredura **rápida** (usa o cache — ideal
+para rodar de novo após resolver pendências) e a **completa** (varre os
+discos de novo para encontrar repositórios criados desde então).
 
 ## Estrutura
 
@@ -54,6 +61,7 @@ lista de exclusões é editável.
 start_app.py          # porta de entrada — menu interativo
 fetchall/
   config.py           # leitura/gravação do config.json
+  cache.py            # cache da última varredura (execuções rápidas)
   scanner.py          # detecção de discos e varredura por repositórios
   gitrepo.py          # análise de estado e ações git (fetch/pull/push)
   syncer.py           # orquestração: plano em duas fases (analisar → executar)

@@ -49,6 +49,13 @@ todos os projetos subiram ao remoto antes de uma troca de máquina.
 - **Correção pós-teste:** caminhos e mensagens do git agora passam por
   `rich.markup.escape` antes de irem para o terminal — um caminho terminado
   em `\` (ex.: `P:\`) escapava o fechamento `[/bold]` e vazava a marcação.
+- **Melhorias pós-teste (pedidas pelo usuário):** exclusões padrão passam a
+  cobrir caches de assistentes de IA (`.gemini`, `.codex`, `.claude`) e
+  bibliotecas Steam (`SteamLibrary`, `steamapps`), com mesclagem automática
+  em configs salvos antes; discos numerados na varredura e no status; cache
+  da última varredura (`scan_cache.json`, ignorado pelo git) com escolha
+  entre varredura rápida (cache) e completa a cada execução — o cache
+  descarta repositórios apagados e é invalidado se os caminhos mudarem.
 - **Limites conhecidos / convites a contribuição:** não cria upstream
   automaticamente (`push -u`); sincroniza apenas o branch atual de cada
   repositório; relatório só em tela (sem exportação).

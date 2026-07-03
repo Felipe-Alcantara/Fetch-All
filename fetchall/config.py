@@ -15,7 +15,14 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 CONFIG_PATH = PROJECT_ROOT / "config.json"
 
 # Pastas que nunca contêm repositórios do usuário ou são caras de varrer.
+# Inclui caches de ferramentas de IA (.gemini, .codex, .claude) e bibliotecas
+# Steam, que criam repositórios git internos que só geram ruído no relatório.
 DEFAULT_EXCLUDES = [
+    ".gemini",
+    ".codex",
+    ".claude",
+    "SteamLibrary",
+    "steamapps",
     "node_modules",
     ".venv",
     "venv",
@@ -57,9 +64,15 @@ def load_config() -> Config:
             f"config.json inválido ({exc}). Corrija ou apague o arquivo "
             "para recriar a configuração padrão."
         ) from exc
+    # Exclusões padrão novas entram mesmo em configs salvos antes delas;
+    # as adições manuais do usuário são preservadas.
+    saved_excludes = list(data.get("exclude_dirs", []))
+    merged_excludes = saved_excludes + [
+        name for name in DEFAULT_EXCLUDES if name not in saved_excludes
+    ]
     return Config(
         scan_roots=list(data.get("scan_roots", [])),
-        exclude_dirs=list(data.get("exclude_dirs", DEFAULT_EXCLUDES)),
+        exclude_dirs=merged_excludes,
         max_workers=int(data.get("max_workers", 8)),
     )
 

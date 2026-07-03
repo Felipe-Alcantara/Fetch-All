@@ -1,5 +1,6 @@
 /Padrão de qualidade - Felixo System Design
 config.json
+scan_cache.json
 __pycache__/
 *.pyc
 .venv/

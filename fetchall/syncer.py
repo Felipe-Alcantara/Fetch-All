@@ -15,6 +15,7 @@ from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 
+from .cache import save_cache
 from .config import Config
 from .gitrepo import (
     PROBLEM_STATES,
@@ -61,13 +62,20 @@ class ActionResult:
 def scan_and_analyze(
     config: Config,
     on_progress: Callable[[str], None] | None = None,
+    cached_repos: list | None = None,
 ) -> SyncPlan:
     """Encontra repositórios e classifica todos, com fetch em paralelo.
 
     Sem caminhos configurados, varre automaticamente todos os discos locais.
+    Com ``cached_repos`` (varredura rápida), pula a busca no disco e analisa
+    direto a lista dada; a varredura completa atualiza o cache ao final.
     """
     roots = resolve_scan_roots(config.scan_roots)
-    repos = list(find_git_repos(roots, config.exclude_dirs))
+    if cached_repos is not None:
+        repos = cached_repos
+    else:
+        repos = list(find_git_repos(roots, config.exclude_dirs))
+        save_cache(roots, repos)
     plan = SyncPlan()
     if not repos:
         return plan
