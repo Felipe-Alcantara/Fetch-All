@@ -56,6 +56,17 @@ todos os projetos subiram ao remoto antes de uma troca de máquina.
   da última varredura (`scan_cache.json`, ignorado pelo git) com escolha
   entre varredura rápida (cache) e completa a cada execução — o cache
   descarta repositórios apagados e é invalidado se os caminhos mudarem.
+- **Auditoria de conformidade com o padrão de qualidade:** adicionada suíte
+  de testes (`tests/`, 25 testes com `unittest`, offline — remotos são
+  repositórios bare temporários) cobrindo classificação de estados,
+  segurança do pull `--ff-only` em divergência, scanner, mesclagem de
+  exclusões no config e cache; README reescrito na estrutura obrigatória do
+  `DESIGN_SYSTEM_README.md` (badges, índice, seções canônicas, autor);
+  `.gitignore` organizado e comentado.
+- **Correção de usabilidade (pedida pelo usuário):** tabelas do relatório
+  não cortam mais texto com "…" — colunas de caminho, detalhe e mensagem
+  usam `overflow="fold"`; falhas de execução mostram a mensagem completa
+  do git.
 - **Limites conhecidos / convites a contribuição:** não cria upstream
   automaticamente (`push -u`); sincroniza apenas o branch atual de cada
   repositório; relatório só em tela (sem exportação).

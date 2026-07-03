@@ -1,7 +1,14 @@
+# Padrão de qualidade clonado localmente (não faz parte deste projeto).
+# Duas grafias: o nome real da pasta e a forma como ela aparece quando o
+# encoding do terminal a corrompe.
 /Padrão de qualidade - Felixo System Design
+/Padr├úo de qualidade - Felixo System Design
+
+# Arquivos locais (contêm caminhos desta máquina)
 config.json
 scan_cache.json
+
+# Python
 __pycache__/
 *.pyc
 .venv/
-/Padr├úo de qualidade - Felixo System Design
