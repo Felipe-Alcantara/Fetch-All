@@ -7,6 +7,7 @@ nada de decisão sobre repositórios.
 from __future__ import annotations
 
 from rich.console import Console
+from rich.markup import escape
 from rich.panel import Panel
 from rich.table import Table
 
@@ -37,9 +38,9 @@ def show_plan(plan: SyncPlan) -> None:
         table.add_column("Ação", style="cyan")
         table.add_column("Commits")
         for status in plan.to_pull:
-            table.add_row(str(status.path), status.branch, "pull (fast-forward)", f"{status.behind} atrás")
+            table.add_row(escape(str(status.path)), status.branch, "pull (fast-forward)", f"{status.behind} atrás")
         for status in plan.to_push:
-            table.add_row(str(status.path), status.branch, "push", f"{status.ahead} à frente")
+            table.add_row(escape(str(status.path)), status.branch, "push", f"{status.ahead} à frente")
         console.print(table)
 
     if plan.problems:
@@ -52,7 +53,7 @@ def show_plan(plan: SyncPlan) -> None:
         table.add_column("Problema", style="red")
         table.add_column("Detalhe")
         for status in plan.problems:
-            table.add_row(str(status.path), status.branch or "—", status.state.value, status.detail)
+            table.add_row(escape(str(status.path)), status.branch or "—", status.state.value, escape(status.detail))
         console.print(table)
 
     if not plan.has_actions and not plan.problems:
@@ -63,9 +64,9 @@ def show_problem_details(problems: list[RepoStatus]) -> None:
     """Lista os arquivos modificados dos repositórios sujos, para diagnóstico."""
     for status in problems:
         if status.dirty_files:
-            console.print(f"\n[bold]{status.path}[/bold] ({status.state.value}):")
+            console.print(f"\n[bold]{escape(str(status.path))}[/bold] ({status.state.value}):")
             for line in status.dirty_files[:20]:
-                console.print(f"  [yellow]{line}[/yellow]")
+                console.print(f"  [yellow]{escape(line)}[/yellow]")
             if len(status.dirty_files) > 20:
                 console.print(f"  … e mais {len(status.dirty_files) - 20} arquivo(s)")
 
@@ -82,7 +83,7 @@ def show_results(results: list[ActionResult]) -> None:
     for result in results:
         outcome = "[green]ok[/green]" if result.ok else "[red]FALHOU[/red]"
         message = result.message.splitlines()[-1] if result.message else ""
-        table.add_row(str(result.status.path), result.action, outcome, message)
+        table.add_row(escape(str(result.status.path)), result.action, outcome, escape(message))
     console.print(table)
 
     failures = [r for r in results if not r.ok]

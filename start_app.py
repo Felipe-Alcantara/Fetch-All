@@ -45,6 +45,7 @@ def _run_sync() -> None:
     """Ação principal: varre, mostra o plano e só executa após confirmação."""
     import questionary
     from rich.console import Console
+    from rich.markup import escape
 
     from fetchall.config import load_config
     from fetchall.report import show_plan, show_problem_details, show_results
@@ -55,7 +56,8 @@ def _run_sync() -> None:
     config = load_config()
     roots = resolve_scan_roots(config.scan_roots)
     scope = "todos os discos locais" if not config.scan_roots else "caminhos configurados"
-    console.print(f"Varrendo {scope}: [bold]{', '.join(roots)}[/bold]")
+    # escape() impede que caminhos terminados em "\" quebrem a marcação do rich.
+    console.print(f"Varrendo {scope}: [bold]{escape(', '.join(roots))}[/bold]")
     with console.status("[cyan]Procurando repositórios e fazendo fetch…[/cyan]"):
         plan = scan_and_analyze(config)
 

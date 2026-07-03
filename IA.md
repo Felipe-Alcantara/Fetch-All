@@ -41,6 +41,14 @@ todos os projetos subiram ao remoto antes de uma troca de máquina.
 - **Validação:** varredura executada na pasta real de projetos do usuário,
   encontrando e classificando os repositórios corretamente (atualizados,
   para push e com pendências), sem executar nenhuma escrita.
+- **Teste em massa (mesmo dia):** varredura completa dos 14 discos locais
+  encontrou 205 repositórios (74 atualizados, 44 para pull, 87 com problema
+  apenas reportados). 42 pulls concluídos; 2 falharam de forma segura e
+  ficaram intactos: um por nome de arquivo com `:` no histórico (inválido em
+  NTFS, exige renomear no remoto) e um por erro de escrita no disco destino.
+- **Correção pós-teste:** caminhos e mensagens do git agora passam por
+  `rich.markup.escape` antes de irem para o terminal — um caminho terminado
+  em `\` (ex.: `P:\`) escapava o fechamento `[/bold]` e vazava a marcação.
 - **Limites conhecidos / convites a contribuição:** não cria upstream
   automaticamente (`push -u`); sincroniza apenas o branch atual de cada
   repositório; relatório só em tela (sem exportação).
