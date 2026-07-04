@@ -70,3 +70,18 @@ todos os projetos subiram ao remoto antes de uma troca de máquina.
 - **Limites conhecidos / convites a contribuição:** não cria upstream
   automaticamente (`push -u`); sincroniza apenas o branch atual de cada
   repositório; relatório só em tela (sem exportação).
+
+### 2026-07-04 — Correção do setup do menu e validação de qualidade
+
+- **Bug corrigido:** a opção **Instalar/Setup** chamava `pip install` no
+  Python em execução e sempre imprimia sucesso, mesmo quando o pip falhava
+  em ambientes gerenciados pelo sistema (PEP 668). Agora o setup valida o
+  retorno do pip, não marca falha como sucesso e prepara as dependências em
+  `.venv` local quando o menu não está rodando dentro dele.
+- **Decisão:** o bootstrap sem `rich`/`questionary` também usa o `.venv`
+  local e reabre o menu com o Python isolado, evitando instalação global
+  acidental e mantendo o `start_app.py` como porta de entrada única.
+- **Documentação:** README passou a explicitar `python3 start_app.py` quando
+  `python` não existir, além do comportamento do setup com `.venv`.
+- **Validação planejada:** regressão coberta por testes unitários do
+  `start_app.py`, além da suíte offline completa e compilação dos módulos.

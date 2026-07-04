@@ -1,42 +1,112 @@
 """Porta de entrada do Fetch All — menu interativo (padrão Felixo System Design).
 
-Rode ``python start_app.py`` e escolha no menu: sincronizar todos os
-repositórios git do PC, instalar dependências, configurar caminhos de
-varredura ou ver o status. Nenhuma ação de escrita acontece sem revisão
-e confirmação explícita do plano.
+Rode ``python start_app.py`` (ou ``python3 start_app.py``) e escolha no
+menu: sincronizar todos os repositórios git do PC, instalar dependências,
+configurar caminhos de varredura ou ver o status. Nenhuma ação de escrita
+acontece sem revisão e confirmação explícita do plano.
 """
 
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent
+VENV_DIR = PROJECT_ROOT / ".venv"
 REQUIRED_PACKAGES = ["rich", "questionary"]
 
 
-def _bootstrap() -> bool:
-    """Garante rich/questionary antes de desenhar o menu; oferece instalar."""
+def _missing_packages(packages: list[str] | None = None) -> list[str]:
+    """Lista dependências Python que ainda não podem ser importadas."""
     missing = []
-    for package in REQUIRED_PACKAGES:
+    for package in packages or REQUIRED_PACKAGES:
         try:
             __import__(package)
         except ImportError:
             missing.append(package)
+    return missing
+
+
+def _project_venv_python() -> Path:
+    """Caminho do Python do ambiente virtual local do projeto."""
+    if sys.platform == "win32":
+        return VENV_DIR / "Scripts" / "python.exe"
+    return VENV_DIR / "bin" / "python"
+
+
+def _uses_project_venv() -> bool:
+    """Indica se o menu está rodando pelo .venv local deste projeto."""
+    return Path(sys.prefix).resolve() == VENV_DIR.resolve()
+
+
+def _create_project_venv() -> bool:
+    """Cria o .venv local se ele ainda não existir."""
+    venv_python = _project_venv_python()
+    if venv_python.exists():
+        return True
+
+    print(f"Criando ambiente virtual local em {VENV_DIR}...")
+    result = subprocess.run([sys.executable, "-m", "venv", str(VENV_DIR)])
+    if result.returncode == 0 and venv_python.exists():
+        return True
+
+    print(
+        "Não foi possível criar o .venv. Em Debian/Ubuntu, instale "
+        "python3-venv e tente novamente."
+    )
+    return False
+
+
+def _install_packages(python_executable: Path, packages: list[str]) -> bool:
+    """Instala pacotes no interpretador informado e valida o retorno."""
+    result = subprocess.run(
+        [str(python_executable), "-m", "pip", "install", *packages]
+    )
+    if result.returncode == 0:
+        return True
+
+    print(
+        "A instalação falhou. O menu não vai marcar o setup como concluído; "
+        "veja a mensagem do pip acima."
+    )
+    return False
+
+
+def _install_menu_dependencies() -> bool:
+    """Prepara dependências do menu em um ambiente local e isolado."""
+    if _uses_project_venv():
+        target_python = Path(sys.executable)
+    else:
+        if not _create_project_venv():
+            return False
+        target_python = _project_venv_python()
+
+    print(f"Instalando dependências do menu com {target_python}...")
+    return _install_packages(target_python, REQUIRED_PACKAGES)
+
+
+def _bootstrap() -> bool:
+    """Garante rich/questionary antes de desenhar o menu; oferece instalar."""
+    missing = _missing_packages()
     if not missing:
         return True
     print(f"Dependências do menu ausentes: {', '.join(missing)}")
-    answer = input("Instalar agora com pip? [S/n] ").strip().lower()
+    answer = input(
+        "Criar/atualizar .venv local e reabrir o menu? [S/n] "
+    ).strip().lower()
     if answer in ("", "s", "sim", "y", "yes"):
-        result = subprocess.run(
-            [sys.executable, "-m", "pip", "install", *missing]
-        )
-        if result.returncode != 0:
-            print("A instalação falhou. Instale manualmente: "
-                  f"{sys.executable} -m pip install {' '.join(missing)}")
+        if not _install_menu_dependencies():
             return False
-        return True
+        if not _uses_project_venv():
+            venv_python = _project_venv_python()
+            print(f"Reabrindo menu com {venv_python}...")
+            os.execv(
+                str(venv_python),
+                [str(venv_python), str(Path(__file__).resolve())],
+            )
+        return not _missing_packages()
     print("Sem as dependências o menu não pode abrir. Nada foi alterado.")
     return False
 
@@ -189,9 +259,23 @@ def _status() -> None:
     table = Table(title="Status do Fetch All")
     table.add_column("Item", style="bold")
     table.add_column("Valor")
+    venv_python = _project_venv_python()
     table.add_row("Python", sys.version.split()[0])
+    table.add_row("Python do menu", sys.executable)
+    table.add_row(
+        "Ambiente local",
+        str(venv_python) if venv_python.exists() else ".venv ainda não criado",
+    )
+    missing = _missing_packages()
+    table.add_row(
+        "Dependências do menu",
+        "ok" if not missing else "faltando: " + ", ".join(missing),
+    )
     table.add_row("Git", git_version)
-    table.add_row("Config", str(CONFIG_PATH) + ("" if CONFIG_PATH.exists() else " (ainda não criado)"))
+    table.add_row(
+        "Config",
+        str(CONFIG_PATH) + ("" if CONFIG_PATH.exists() else " (ainda não criado)"),
+    )
     mode = "manual (config.json)" if config.scan_roots else "automática (todos os discos locais)"
     table.add_row("Modo de varredura", mode)
     cache_info = (
@@ -244,8 +328,15 @@ def main() -> None:
             console.print("Até logo! Nada além do que você confirmou foi alterado.")
             return
         if choice == "install":
-            subprocess.run([sys.executable, "-m", "pip", "install", *REQUIRED_PACKAGES])
-            console.print("[green]Dependências verificadas/instaladas.[/green]")
+            if _install_menu_dependencies():
+                console.print("[green]Dependências do menu prontas.[/green]")
+                if not _uses_project_venv():
+                    console.print(
+                        "Ambiente local preparado. Para usar isolado, rode: "
+                        f"[bold]{_project_venv_python()} start_app.py[/bold]"
+                    )
+            else:
+                console.print("[red]Setup falhou; nada foi marcado como concluído.[/red]")
             continue
         try:
             actions[choice]()

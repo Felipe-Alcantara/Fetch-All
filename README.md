@@ -95,15 +95,24 @@ Forma mais simples — abre o menu interativo onde você instala, configura e in
 python start_app.py
 ```
 
+Se o comando `python` não existir no sistema, use:
+
+```bash
+python3 start_app.py
+```
+
 No menu você escolhe: **Iniciar/Rodar** (varre e sincroniza), **Instalar/Setup**
-(dependências `rich` e `questionary`), **Configurar** (restringir a varredura a
-pastas específicas e editar exclusões) e **Status/Sair**.
+(cria/atualiza `.venv` e instala `rich` + `questionary`), **Configurar**
+(restringir a varredura a pastas específicas e editar exclusões) e **Status/Sair**.
 
 ### Requisitos
 
 - Python 3.10+ (3.12+ no Windows para detecção automática de discos)
 - Git instalado e no `PATH`, com credenciais já configuradas (o programa
   nunca pede senha; repositórios sem credencial aparecem como erro de fetch)
+- Em distribuições com Python gerenciado pelo sistema (PEP 668), use a opção
+  **Instalar/Setup** do menu; ela prepara um `.venv` local em vez de forçar
+  instalação global com pip.
 
 ### Configuração
 
@@ -121,7 +130,7 @@ temporárias) e cobre a classificação de estados, o scanner, a configuração
 e o cache:
 
 ```bash
-python -m unittest discover -s tests
+python3 -m unittest discover -s tests
 ```
 
 ---
