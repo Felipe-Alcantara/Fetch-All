@@ -85,3 +85,19 @@ todos os projetos subiram ao remoto antes de uma troca de máquina.
   `python` não existir, além do comportamento do setup com `.venv`.
 - **Validação planejada:** regressão coberta por testes unitários do
   `start_app.py`, além da suíte offline completa e compilação dos módulos.
+
+### 2026-07-05 — Registro em Markdown de cada passada
+
+- **Feature (pedida pelo usuário):** cada execução da sincronização gera um
+  arquivo `passadas/AAAA-MM-DD_HH-MM-SS.md` com data/hora, modo de
+  varredura, totais, o que foi feito, o que não foi feito (ações
+  canceladas, falhas e problemas), o que foi salvo no remoto (pushes) e as
+  pendências.
+- **Decisão:** lógica isolada em `fetchall/runlog.py` (montagem do texto
+  separada da gravação, para testabilidade); o menu apenas chama
+  `write_run_report` ao final de `_run_sync`, em qualquer desfecho
+  (executado, cancelado ou sem ações). A pasta `passadas/` é ignorada pelo
+  git por conter caminhos locais da máquina.
+- **Validação:** 5 testes novos em `tests/test_runlog.py` (executado,
+  cancelado, sem pendências, falha de ação e nome do arquivo); suíte
+  completa com 33 testes passando.

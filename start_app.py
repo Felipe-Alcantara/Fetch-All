@@ -120,6 +120,7 @@ def _run_sync() -> None:
     from fetchall.cache import load_cache
     from fetchall.config import load_config
     from fetchall.report import show_plan, show_problem_details, show_results
+    from fetchall.runlog import write_run_report
     from fetchall.scanner import resolve_scan_roots
     from fetchall.syncer import execute_plan, scan_and_analyze
 
@@ -172,19 +173,25 @@ def _run_sync() -> None:
             "NÃO serão tocados. Resolva-os manualmente (commit, merge ou "
             "configuração de remoto) e rode a sincronização de novo."
         )
-    if not plan.has_actions:
-        return
 
-    if questionary.confirm(
-        f"Executar {len(plan.to_pull)} pull(s) fast-forward e "
-        f"{len(plan.to_push)} push(es) listados acima?",
-        default=False,
-    ).ask():
-        with console.status("[cyan]Sincronizando…[/cyan]"):
-            results = execute_plan(plan)
-        show_results(results)
-    else:
-        console.print("[yellow]Cancelado — nenhum repositório foi alterado.[/yellow]")
+    scan_mode = "rápida (cache)" if cached_repos is not None else "completa"
+    results: list = []
+    executed = False
+    if plan.has_actions:
+        if questionary.confirm(
+            f"Executar {len(plan.to_pull)} pull(s) fast-forward e "
+            f"{len(plan.to_push)} push(es) listados acima?",
+            default=False,
+        ).ask():
+            executed = True
+            with console.status("[cyan]Sincronizando…[/cyan]"):
+                results = execute_plan(plan)
+            show_results(results)
+        else:
+            console.print("[yellow]Cancelado — nenhum repositório foi alterado.[/yellow]")
+
+    report_path = write_run_report(plan, results, executed, scan_mode)
+    console.print(f"Registro da passada salvo em [bold]{escape(str(report_path))}[/bold]")
 
 
 def _configure() -> None:

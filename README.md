@@ -63,7 +63,9 @@ fetchall/
   gitrepo.py          # análise de estado e ações git (fetch/pull/push)
   syncer.py           # orquestração: plano em duas fases (analisar → executar)
   report.py           # tabelas e painéis no terminal (rich)
+  runlog.py           # relatório Markdown de cada passada (pasta passadas/)
 tests/                # suíte de testes (repositórios git temporários, offline)
+passadas/             # um .md por execução (gerado; ignorado pelo git)
 ```
 
 ---
@@ -84,6 +86,13 @@ percorrer os discos de novo. Repositórios apagados são descartados na hora.
 ### 🔀 Sincronização em duas fases (`fetchall/syncer.py`)
 Fase 1 só lê (varredura + fetch paralelo + classificação); fase 2 executa
 pulls e pushes — e só roda depois que você revisa o plano e confirma.
+
+### 📝 Registro de passadas (`fetchall/runlog.py`)
+Cada execução da sincronização gera um arquivo Markdown em `passadas/`
+(nomeado pela data e hora) registrando o que foi feito, o que não foi
+feito, o que foi salvo no remoto e o que ficou pendente — um histórico
+auditável de todas as passadas. A pasta é ignorada pelo git por conter
+caminhos locais.
 
 ---
 
@@ -146,7 +155,7 @@ python3 -m unittest discover -s tests
 
 ## 🤝 Ideias para quem quiser contribuir
 
-- Exportar o relatório final em arquivo (Markdown/JSON) para auditoria.
+- Exportar o registro das passadas também em JSON, para consumo por outras ferramentas.
 - Agendamento periódico da sincronização.
 - Suporte a criar upstream automaticamente (`push -u`) mediante confirmação.
 
