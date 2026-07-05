@@ -59,6 +59,21 @@ class BuildRunReportTests(unittest.TestCase):
         self.assertIn("1 item(ns) exigem atenção manual", text)
 
 
+    def test_auto_committed_repo_is_not_listed_as_pending(self) -> None:
+        dirty = _status("a", RepoState.DIRTY, detail="1 arquivo(s)")
+        plan = SyncPlan(problems=[dirty])
+        results = [
+            ActionResult(dirty, "commit", True, "ok"),
+            ActionResult(dirty, "pull", True, "ok"),
+            ActionResult(dirty, "push", True, "ok"),
+        ]
+        text = build_run_report(plan, results, executed=True, scan_mode="completa", when=WHEN)
+        self.assertIn("commit concluído", text)
+        self.assertIn("push enviado ao remoto", text)
+        self.assertIn("Nenhuma pendência", text)
+        self.assertNotIn(RepoState.DIRTY.value, text)
+
+
 class WriteRunReportTests(unittest.TestCase):
     def test_writes_file_named_by_timestamp(self) -> None:
         base = Path(tempfile.mkdtemp(prefix="fetchall-runlog-"))

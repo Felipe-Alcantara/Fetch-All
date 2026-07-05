@@ -163,6 +163,20 @@ def pull_ff_only(status: RepoStatus) -> tuple[bool, str]:
     return ok, (proc.stdout if ok else proc.stderr).strip()
 
 
+def commit_all(status: RepoStatus, message: str) -> tuple[bool, str]:
+    """Adiciona tudo (``git add -A``) e cria um commit com a mensagem dada.
+
+    Usado apenas no fluxo de commit automático, com confirmação explícita
+    do usuário; nunca é chamado sem o repositório estar em estado DIRTY.
+    """
+    add = _git(status.path, "add", "-A")
+    if add.returncode != 0:
+        return False, add.stderr.strip()
+    proc = _git(status.path, "commit", "-m", message)
+    ok = proc.returncode == 0
+    return ok, (proc.stdout + proc.stderr).strip()
+
+
 def push(status: RepoStatus) -> tuple[bool, str]:
     """Push simples do branch atual para o upstream já configurado."""
     proc = _git(status.path, "push")

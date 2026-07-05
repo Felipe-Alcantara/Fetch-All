@@ -101,3 +101,25 @@ todos os projetos subiram ao remoto antes de uma troca de máquina.
 - **Validação:** 5 testes novos em `tests/test_runlog.py` (executado,
   cancelado, sem pendências, falha de ação e nome do arquivo); suíte
   completa com 33 testes passando.
+
+### 2026-07-05 — Commit automático opcional para repositórios sujos
+
+- **Feature (pedida pelo usuário):** quando a única pendência de um
+  repositório é commitar (DIRTY sem estar atrás do remoto), o menu oferece
+  um commit automático de tudo com mensagem padronizada
+  (`chore: commit automático do Fetch All — <dia da semana>, <data> <hora>`),
+  seguido de pull `--ff-only` e push.
+- **Decisão de segurança (reforçada pelo usuário):** repositórios sujos que
+  também estão atrás do remoto ficam de fora — commitar neles criaria
+  divergência. O fluxo exige confirmação explícita (default Não), o pull
+  continua fast-forward-only e qualquer falha interrompe a sequência daquele
+  repositório, apenas reportando; nada destrutivo é executado.
+- **Implementação:** `commit_all` em `gitrepo.py` (`add -A` + `commit -m`);
+  `auto_commit_candidates`, `build_auto_commit_message` e
+  `execute_auto_commits` em `syncer.py`; oferta no `_run_sync` do menu; o
+  registro de passadas passa a não listar como pendência os repositórios
+  resolvidos pelo commit automático.
+- **Validação:** 5 testes novos (mensagem, filtro de candidatos, fluxo
+  commit+pull+push real em repositório temporário, falha de commit
+  interrompendo o fluxo, e runlog sem pendência falsa); suíte completa com
+  38 testes passando.

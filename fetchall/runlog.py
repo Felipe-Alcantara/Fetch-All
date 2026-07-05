@@ -69,11 +69,15 @@ def build_run_report(
             _repo_line(r.status, f"{r.action} FALHOU: {r.message.strip() or 'sem mensagem'}")
             for r in failed
         ]
-    if plan.problems:
+    # Problemas resolvidos nesta passada (commit automático bem-sucedido)
+    # não contam como "não feito".
+    resolved = {r.status.path for r in ok if r.action == "commit"}
+    unresolved = [s for s in plan.problems if s.path not in resolved]
+    if unresolved:
         skipped = True
         lines += [
             _repo_line(s, f"{s.state.value}" + (f" — {s.detail}" if s.detail else ""))
-            for s in plan.problems
+            for s in unresolved
         ]
     if not skipped:
         lines.append("- Nada ficou de fora: todas as ações planejadas foram executadas.")
@@ -85,7 +89,7 @@ def build_run_report(
     else:
         lines.append("- Nenhum push nesta passada.")
 
-    pending = len(plan.problems) + len(failed) + (
+    pending = len(unresolved) + len(failed) + (
         len(plan.to_pull) + len(plan.to_push) if not executed else 0
     )
     lines += ["", "## Pendências", ""]

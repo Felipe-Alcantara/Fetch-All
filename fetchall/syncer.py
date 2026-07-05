@@ -14,6 +14,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
+from datetime import datetime
 
 from .cache import save_cache
 from .config import Config
@@ -22,8 +23,15 @@ from .gitrepo import (
     RepoState,
     RepoStatus,
     analyze_repo,
+    commit_all,
     pull_ff_only,
     push,
+)
+
+# Dias da semana em português para a mensagem de commit automático.
+_WEEKDAYS_PT = (
+    "segunda-feira", "terça-feira", "quarta-feira", "quinta-feira",
+    "sexta-feira", "sábado", "domingo",
 )
 from .scanner import find_git_repos, resolve_scan_roots
 
@@ -47,6 +55,19 @@ class SyncPlan:
     @property
     def has_actions(self) -> bool:
         return bool(self.to_pull or self.to_push)
+
+    @property
+    def auto_commit_candidates(self) -> list[RepoStatus]:
+        """Repositórios em que a ÚNICA pendência é commitar as mudanças.
+
+        Só entram os DIRTY que não estão atrás do remoto: commitar um
+        repositório atrás do remoto criaria divergência, então esses
+        continuam sendo apenas reportados.
+        """
+        return [
+            s for s in self.problems
+            if s.state is RepoState.DIRTY and s.behind == 0
+        ]
 
 
 @dataclass
@@ -102,6 +123,48 @@ def _classify(plan: SyncPlan, status: RepoStatus) -> None:
         plan.to_push.append(status)
     elif status.state in PROBLEM_STATES:
         plan.problems.append(status)
+
+
+def build_auto_commit_message(when: datetime | None = None) -> str:
+    """Mensagem genérica e padronizada para o commit automático.
+
+    Exemplo: ``chore: commit automático do Fetch All — sábado, 05/07/2026 14:30``.
+    """
+    when = when or datetime.now()
+    weekday = _WEEKDAYS_PT[when.weekday()]
+    return (
+        "chore: commit automático do Fetch All — "
+        f"{weekday}, {when.strftime('%d/%m/%Y %H:%M')}"
+    )
+
+
+def execute_auto_commits(
+    candidates: list[RepoStatus],
+    message: str,
+    on_progress: Callable[[str], None] | None = None,
+) -> list[ActionResult]:
+    """Commita tudo nos candidatos e sincroniza (pull --ff-only + push).
+
+    Deve receber apenas ``plan.auto_commit_candidates`` já confirmados pelo
+    usuário. Se o commit falhar, o repositório não é sincronizado.
+    """
+    notify = on_progress or (lambda _msg: None)
+    results: list[ActionResult] = []
+    for status in candidates:
+        ok, msg = commit_all(status, message)
+        results.append(ActionResult(status, "commit", ok, msg))
+        notify(f"commit {status.name}: {'ok' if ok else 'FALHOU'}")
+        if not ok:
+            continue
+        ok, msg = pull_ff_only(status)
+        results.append(ActionResult(status, "pull", ok, msg))
+        notify(f"pull {status.name}: {'ok' if ok else 'FALHOU'}")
+        if not ok:
+            continue
+        ok, msg = push(status)
+        results.append(ActionResult(status, "push", ok, msg))
+        notify(f"push {status.name}: {'ok' if ok else 'FALHOU'}")
+    return results
 
 
 def execute_plan(

@@ -122,7 +122,12 @@ def _run_sync() -> None:
     from fetchall.report import show_plan, show_problem_details, show_results
     from fetchall.runlog import write_run_report
     from fetchall.scanner import resolve_scan_roots
-    from fetchall.syncer import execute_plan, scan_and_analyze
+    from fetchall.syncer import (
+        build_auto_commit_message,
+        execute_auto_commits,
+        execute_plan,
+        scan_and_analyze,
+    )
 
     console = Console()
     config = load_config()
@@ -189,6 +194,34 @@ def _run_sync() -> None:
             show_results(results)
         else:
             console.print("[yellow]Cancelado — nenhum repositório foi alterado.[/yellow]")
+
+    # Commit automático: só para repositórios cuja ÚNICA pendência é commitar.
+    candidates = plan.auto_commit_candidates
+    if candidates:
+        message = build_auto_commit_message()
+        console.print(
+            f"\n[bold]{len(candidates)}[/bold] repositório(s) sujos podem ser "
+            "resolvidos com um commit automático de tudo + pull (fast-forward) + push:"
+        )
+        for status in candidates:
+            console.print(f"  • {escape(str(status.path))} ({escape(status.detail)})")
+        console.print(f"Mensagem do commit: [bold]{escape(message)}[/bold]")
+        console.print(
+            "[dim]Repositórios sujos que também estão atrás do remoto ficam de "
+            "fora: commitar neles criaria divergência. Qualquer falha "
+            "interrompe aquele repositório sem tocar em mais nada.[/dim]"
+        )
+        if questionary.confirm(
+            f"Commitar tudo e sincronizar esses {len(candidates)} repositório(s)?",
+            default=False,
+        ).ask():
+            executed = True
+            with console.status("[cyan]Commitando e sincronizando…[/cyan]"):
+                auto_results = execute_auto_commits(candidates, message)
+            results += auto_results
+            show_results(auto_results)
+        else:
+            console.print("[yellow]Commit automático recusado — nada foi commitado.[/yellow]")
 
     report_path = write_run_report(plan, results, executed, scan_mode)
     console.print(f"Registro da passada salvo em [bold]{escape(str(report_path))}[/bold]")

@@ -87,6 +87,16 @@ percorrer os discos de novo. Repositórios apagados são descartados na hora.
 Fase 1 só lê (varredura + fetch paralelo + classificação); fase 2 executa
 pulls e pushes — e só roda depois que você revisa o plano e confirma.
 
+### 📌 Commit automático opcional (`fetchall/syncer.py`)
+Quando a **única** pendência de um repositório é commitar as mudanças
+(sujo, mas sem estar atrás do remoto), o programa oferece criar um commit
+de tudo com mensagem padronizada — ex.:
+`chore: commit automático do Fetch All — sábado, 05/07/2026 14:30` —
+seguido de pull `--ff-only` e push. Sempre com confirmação explícita;
+repositórios sujos que também estão atrás do remoto ficam de fora
+(commitar criaria divergência) e qualquer falha interrompe aquele
+repositório sem tocar em mais nada.
+
 ### 📝 Registro de passadas (`fetchall/runlog.py`)
 Cada execução da sincronização gera um arquivo Markdown em `passadas/`
 (nomeado pela data e hora) registrando o que foi feito, o que não foi

@@ -12,7 +12,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from fetchall.gitrepo import RepoState, analyze_repo, pull_ff_only, push
+from fetchall import syncer
+from fetchall.gitrepo import RepoState, RepoStatus, analyze_repo, pull_ff_only, push
 from tests.helpers import commit, git, make_remote_and_clone
 
 
@@ -122,3 +123,49 @@ class GitRepoStateTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class AutoCommitTests(unittest.TestCase):
+    """Fluxo de commit automático: commit de tudo + pull --ff-only + push."""
+
+    def setUp(self) -> None:
+        self.base = Path(tempfile.mkdtemp(prefix="fetchall-autocommit-"))
+        self.addCleanup(shutil.rmtree, self.base, ignore_errors=True)
+        self.remote, self.clone = make_remote_and_clone(self.base)
+        # Identidade local para o commit automático não depender do global.
+        git(self.clone, "config", "user.name", "Teste")
+        git(self.clone, "config", "user.email", "teste@example.com")
+        git(self.clone, "config", "commit.gpgsign", "false")
+
+    def test_message_is_structured_with_weekday_date_and_time(self) -> None:
+        from datetime import datetime
+
+        message = syncer.build_auto_commit_message(datetime(2026, 7, 5, 14, 30))
+        self.assertEqual(
+            message,
+            "chore: commit automático do Fetch All — domingo, 05/07/2026 14:30",
+        )
+
+    def test_candidates_exclude_dirty_repos_behind_remote(self) -> None:
+        dirty_ok = RepoStatus(Path("/a"), RepoState.DIRTY, behind=0)
+        dirty_behind = RepoStatus(Path("/b"), RepoState.DIRTY, behind=2)
+        diverged = RepoStatus(Path("/c"), RepoState.DIVERGED)
+        plan = syncer.SyncPlan(problems=[dirty_ok, dirty_behind, diverged])
+        self.assertEqual(plan.auto_commit_candidates, [dirty_ok])
+
+    def test_commits_pulls_and_pushes_dirty_repo(self) -> None:
+        (self.clone / "novo.txt").write_text("pendente", encoding="utf-8")
+        status = analyze_repo(self.clone)
+        self.assertIs(status.state, RepoState.DIRTY)
+
+        results = syncer.execute_auto_commits([status], "chore: teste automático")
+        self.assertEqual([r.action for r in results], ["commit", "pull", "push"])
+        self.assertTrue(all(r.ok for r in results))
+        self.assertIs(analyze_repo(self.clone).state, RepoState.UP_TO_DATE)
+
+    def test_failed_commit_stops_that_repo_without_sync(self) -> None:
+        # Repositório limpo: "git commit" falha (nada a commitar) e o fluxo para.
+        status = analyze_repo(self.clone)
+        results = syncer.execute_auto_commits([status], "chore: teste")
+        self.assertEqual([r.action for r in results], ["commit"])
+        self.assertFalse(results[0].ok)
