@@ -1,6 +1,7 @@
 # 🔄 Fetch All
 
-![Python](https://img.shields.io/badge/Python-3.12+-blue?style=for-the-badge&logo=python&logoColor=white)
+![Python](https://img.shields.io/badge/Python-3.10+-blue?style=for-the-badge&logo=python&logoColor=white)
+![SO](https://img.shields.io/badge/Windows%20%C2%B7%20Linux%20%C2%B7%20macOS-suportados-blueviolet?style=for-the-badge)
 ![Git](https://img.shields.io/badge/Git-obrigat%C3%B3rio-F05032?style=for-the-badge&logo=git&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)
 ![Testes](https://img.shields.io/badge/Testes-unittest-brightgreen?style=for-the-badge)
@@ -72,11 +73,22 @@ passadas/             # um .md por execução (gerado; ignorado pelo git)
 
 ## 🚀 Funcionalidades
 
-### 🔍 Varredura automática (`fetchall/scanner.py`)
+### 🔍 Varredura automática e paralela (`fetchall/scanner.py`)
 Detecta todos os discos locais (fixos e removíveis) e encontra qualquer
-repositório git, incluindo aninhados. Pastas pesadas ou de sistema
-(`node_modules`, `Windows`, caches de assistentes de IA, bibliotecas Steam
-etc.) são puladas por padrão, com lista de exclusões editável.
+repositório git, incluindo aninhados — com **todos os discos varridos ao
+mesmo tempo** (uma thread por disco; a varredura é limitada por I/O, não
+por CPU). Pastas pesadas ou de sistema (`node_modules`, `Windows`, caches
+de assistentes de IA, bibliotecas Steam etc.) são puladas por padrão, com
+lista de exclusões editável.
+
+Funciona em qualquer sistema operacional:
+
+- **Windows** — enumera as unidades pela API do sistema (rede e CD/DVD
+  ficam de fora); em Python anterior ao 3.12 usa um fallback equivalente.
+- **Linux/macOS/BSD** — varre a partir de `/` pulando pontos de montagem
+  virtuais (`/proc`, `/sys`, snaps, tmpfs…) e de rede (NFS, SMB, sshfs…),
+  lidos de `/proc/mounts` ou do comando `mount`; discos NTFS montados via
+  ntfs-3g continuam dentro da varredura.
 
 ### ⚡ Cache de varredura (`fetchall/cache.py`)
 Após a primeira varredura completa, as execuções seguintes podem usar a
@@ -126,9 +138,12 @@ No menu você escolhe: **Iniciar/Rodar** (varre e sincroniza), **Instalar/Setup*
 
 ### Requisitos
 
-- Python 3.10+ (3.12+ no Windows para detecção automática de discos)
+- Windows, Linux ou macOS
+- Python 3.10+ (o menu confere a versão e avisa com mensagem clara)
 - Git instalado e no `PATH`, com credenciais já configuradas (o programa
-  nunca pede senha; repositórios sem credencial aparecem como erro de fetch)
+  nunca pede senha; repositórios sem credencial aparecem como erro de
+  fetch). Se o git não for encontrado, o menu mostra como instalar no seu
+  sistema (winget, apt, brew…)
 - Em distribuições com Python gerenciado pelo sistema (PEP 668), use a opção
   **Instalar/Setup** do menu; ela prepara um `.venv` local em vez de forçar
   instalação global com pip.
@@ -166,6 +181,8 @@ python3 -m unittest discover -s tests
 ## 🤝 Ideias para quem quiser contribuir
 
 - Exportar o registro das passadas também em JSON, para consumo por outras ferramentas.
+- Paralelizar a varredura dentro de uma mesma raiz (hoje o paralelismo é por
+  disco; no Linux/macOS a varredura automática usa uma raiz única `/`).
 - Agendamento periódico da sincronização.
 - Suporte a criar upstream automaticamente (`push -u`) mediante confirmação.
 

@@ -27,6 +27,7 @@ DEFAULT_EXCLUDES = [
     ".venv",
     "venv",
     "__pycache__",
+    # Windows: lixeira e pastas de sistema/programas.
     "$RECYCLE.BIN",
     "System Volume Information",
     "Windows",
@@ -34,6 +35,13 @@ DEFAULT_EXCLUDES = [
     "Program Files (x86)",
     "ProgramData",
     "AppData",
+    # Linux/macOS: lixeiras, caches (ex.: ~/.cache/pre-commit clona
+    # repositórios git internos) e pastas de sistema.
+    "lost+found",
+    ".cache",
+    "snap",
+    ".Trash",
+    ".Trashes",
 ]
 
 

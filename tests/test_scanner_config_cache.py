@@ -12,7 +12,12 @@ from fetchall import cache as cache_module
 from fetchall import config as config_module
 from fetchall.cache import load_cache, save_cache
 from fetchall.config import DEFAULT_EXCLUDES, Config, load_config, save_config
-from fetchall.scanner import find_git_repos, resolve_scan_roots
+from fetchall.scanner import (
+    find_git_repos,
+    parse_bsd_mount_skips,
+    parse_linux_mount_skips,
+    resolve_scan_roots,
+)
 
 
 def _fake_repo(path: Path) -> None:
@@ -56,6 +61,81 @@ class ScannerTests(unittest.TestCase):
     def test_resolve_scan_roots_falls_back_to_drives(self) -> None:
         roots = resolve_scan_roots([])
         self.assertTrue(roots)  # sempre há pelo menos um disco/raiz
+
+    def test_multiple_roots_scanned_in_parallel_find_everything(self) -> None:
+        # Com mais de uma raiz, cada uma é varrida em thread própria;
+        # o resultado precisa ser o mesmo da varredura sequencial.
+        _fake_repo(self.base / "disco-a" / "projeto-a")
+        _fake_repo(self.base / "disco-b" / "projeto-b")
+        _fake_repo(self.base / "disco-b" / "pasta" / "projeto-c")
+        found = sorted(
+            p.name for p in find_git_repos(
+                [str(self.base / "disco-a"), str(self.base / "disco-b")], []
+            )
+        )
+        self.assertEqual(found, ["projeto-a", "projeto-b", "projeto-c"])
+
+    def test_repeated_roots_do_not_duplicate_repos(self) -> None:
+        _fake_repo(self.base / "projeto")
+        found = list(find_git_repos([str(self.base), str(self.base)], []))
+        self.assertEqual(len(found), 1)
+
+    def test_skip_paths_prune_mount_points(self) -> None:
+        # Simula uma montagem virtual/de rede dentro da árvore varrida.
+        _fake_repo(self.base / "projeto")
+        _fake_repo(self.base / "montagem-de-rede" / "repo-remoto")
+        found = list(
+            find_git_repos(
+                [str(self.base)], [],
+                skip_paths={str(self.base / "montagem-de-rede")},
+            )
+        )
+        self.assertEqual([p.name for p in found], ["projeto"])
+
+
+class MountParsingTests(unittest.TestCase):
+    def test_linux_mounts_skip_virtual_and_network(self) -> None:
+        lines = [
+            "/dev/sda2 / ext4 rw,relatime 0 0",
+            "proc /proc proc rw,nosuid 0 0",
+            "sysfs /sys sysfs rw,nosuid 0 0",
+            "tmpfs /run tmpfs rw,nosuid 0 0",
+            "/dev/sdb1 /mnt/dados fuseblk rw,relatime 0 0",  # ntfs-3g: local
+            "servidor:/dados /mnt/nas nfs4 rw,relatime 0 0",
+            "//servidor/share /mnt/smb cifs rw,relatime 0 0",
+            "user@host: /mnt/ssh fuse.sshfs rw,nosuid 0 0",
+            "/var/lib/snapd/snaps/x.snap /snap/x/1 squashfs ro 0 0",
+            "cgroup2 /sys/fs/cgroup cgroup2 rw,nosuid 0 0",
+        ]
+        skips = parse_linux_mount_skips(lines)
+        self.assertIn("/proc", skips)
+        self.assertIn("/sys", skips)
+        self.assertIn("/run", skips)
+        self.assertIn("/mnt/nas", skips)
+        self.assertIn("/mnt/smb", skips)
+        self.assertIn("/mnt/ssh", skips)
+        self.assertIn("/snap/x/1", skips)
+        self.assertNotIn("/", skips)  # raiz é disco local
+        self.assertNotIn("/mnt/dados", skips)  # fuseblk (ntfs-3g) é local
+
+    def test_linux_mounts_decode_octal_escaped_spaces(self) -> None:
+        lines = [r"tmpfs /mnt/pasta\040com\040espaço tmpfs rw 0 0"]
+        self.assertEqual(
+            parse_linux_mount_skips(lines), {"/mnt/pasta com espaço"}
+        )
+
+    def test_bsd_mount_output_skip_virtual(self) -> None:
+        lines = [
+            "/dev/disk3s1s1 on / (apfs, sealed, local, read-only journaled)",
+            "devfs on /dev (devfs, local, nobrowse)",
+            "map auto_home on /System/Volumes/Data/home (autofs, automounted)",
+            "//user@server/share on /Volumes/share (smbfs, nodev, nosuid)",
+            "/dev/disk4s1 on /Volumes/Backup (apfs, local, journaled)",
+        ]
+        skips = parse_bsd_mount_skips(lines)
+        self.assertEqual(
+            skips, {"/dev", "/System/Volumes/Data/home", "/Volumes/share"}
+        )
 
 
 class ConfigTests(unittest.TestCase):

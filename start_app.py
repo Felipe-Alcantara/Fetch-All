@@ -8,7 +8,7 @@ acontece sem revisão e confirmação explícita do plano.
 
 from __future__ import annotations
 
-import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -16,6 +16,30 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent
 VENV_DIR = PROJECT_ROOT / ".venv"
 REQUIRED_PACKAGES = ["rich", "questionary"]
+MIN_PYTHON = (3, 10)
+
+
+def _check_python_version() -> bool:
+    """Confere a versão mínima do Python com mensagem clara, em qualquer SO."""
+    if sys.version_info >= MIN_PYTHON:
+        return True
+    minimum = ".".join(str(part) for part in MIN_PYTHON)
+    print(
+        f"Este programa precisa de Python {minimum} ou mais novo; "
+        f"você está usando {sys.version.split()[0]}.\n"
+        "Instale uma versão mais nova em https://www.python.org/downloads/ "
+        "(ou pelo gerenciador de pacotes do seu sistema) e rode de novo."
+    )
+    return False
+
+
+def _git_install_hint() -> str:
+    """Dica de instalação do git adequada ao sistema operacional atual."""
+    if sys.platform == "win32":
+        return "instale com 'winget install Git.Git' ou baixe em https://git-scm.com"
+    if sys.platform == "darwin":
+        return "instale com 'xcode-select --install' ou 'brew install git'"
+    return "instale pelo gerenciador do sistema (ex.: 'sudo apt install git')"
 
 
 def _missing_packages(packages: list[str] | None = None) -> list[str]:
@@ -102,10 +126,12 @@ def _bootstrap() -> bool:
         if not _uses_project_venv():
             venv_python = _project_venv_python()
             print(f"Reabrindo menu com {venv_python}...")
-            os.execv(
-                str(venv_python),
-                [str(venv_python), str(Path(__file__).resolve())],
+            # subprocess (e não os.execv): no Windows, execv não trata
+            # espaços no caminho e o .venv pode estar em pasta com espaços.
+            completed = subprocess.run(
+                [str(venv_python), str(Path(__file__).resolve())]
             )
+            sys.exit(completed.returncode)
         return not _missing_packages()
     print("Sem as dependências o menu não pode abrir. Nada foi alterado.")
     return False
@@ -130,6 +156,12 @@ def _run_sync() -> None:
     )
 
     console = Console()
+    if shutil.which("git") is None:
+        console.print(
+            f"[red]Git não encontrado no PATH[/red] — {_git_install_hint()} "
+            "e rode a sincronização de novo. Nada foi alterado."
+        )
+        return
     config = load_config()
     roots = resolve_scan_roots(config.scan_roots)
 
@@ -250,7 +282,11 @@ def _configure() -> None:
             ],
         ).ask()
         if choice == "add":
-            path = questionary.path("Caminho da pasta (ex.: C:\\Projetos):").ask()
+            example = (
+                "C:\\Projetos" if sys.platform == "win32"
+                else str(Path.home() / "Projetos")
+            )
+            path = questionary.path(f"Caminho da pasta (ex.: {example}):").ask()
             if path:
                 resolved = str(Path(path).expanduser())
                 if not Path(resolved).exists():
@@ -289,7 +325,7 @@ def _status() -> None:
             ["git", "--version"], capture_output=True, text=True
         ).stdout.strip()
     except FileNotFoundError:
-        git_version = "[red]git não encontrado no PATH — instale o Git[/red]"
+        git_version = f"[red]git não encontrado no PATH[/red] — {_git_install_hint()}"
 
     from fetchall.cache import load_cache
     from fetchall.scanner import resolve_scan_roots
@@ -330,6 +366,8 @@ def _status() -> None:
 
 
 def main() -> None:
+    if not _check_python_version():
+        sys.exit(1)
     if not _bootstrap():
         sys.exit(1)
 

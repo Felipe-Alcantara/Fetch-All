@@ -123,3 +123,45 @@ todos os projetos subiram ao remoto antes de uma troca de máquina.
   commit+pull+push real em repositório temporário, falha de commit
   interrompendo o fluxo, e runlog sem pendência falsa); suíte completa com
   38 testes passando.
+
+### 2026-07-06 — Portabilidade para qualquer SO e varredura paralela por disco
+
+- **Auditoria (pedida pelo usuário):** o programa anunciava suporte amplo,
+  mas tinha lacunas reais fora do Windows e em Python antigo. Corrigidas:
+  - **Linux/macOS/BSD:** a varredura automática partia de `/` e descia em
+    `/proc`, `/sys`, snaps e montagens de rede. Agora o scanner lê os pontos
+    de montagem (`/proc/mounts` no Linux; comando `mount` no macOS/BSD;
+    fallback estático `/proc`, `/sys`, `/dev`, `/run`) e poda os de
+    filesystem virtual ou de rede — `fuseblk` (ntfs-3g) segue sendo tratado
+    como disco local. Funções de parse puras (`parse_linux_mount_skips`,
+    `parse_bsd_mount_skips`) para testabilidade; `find_git_repos` aceita
+    `skip_paths` injetável.
+  - **Windows com Python < 3.12:** `os.listdrives()` não existia; fallback
+    via `GetLogicalDrives` (ctypes). Requisito geral do projeto passa a ser
+    Python 3.10+, conferido no início do menu com mensagem clara.
+  - **Bug de relançamento:** o bootstrap reabria o menu com `os.execv`, que
+    no Windows não trata espaços no caminho (o próprio projeto pode viver em
+    pasta com espaços). Trocado por `subprocess.run` + `sys.exit`.
+  - **Git ausente:** a sincronização agora verifica `shutil.which("git")`
+    antes de varrer e mostra dica de instalação específica do SO (winget,
+    xcode-select/brew, apt); o Status usa a mesma dica.
+  - **Exclusões padrão POSIX:** `lost+found`, `.cache` (ex.: pre-commit
+    clona repositórios git internos ali), `snap`, `.Trash`, `.Trashes` —
+    mescladas automaticamente em configs antigos.
+- **Feature (pedida pelo usuário): varredura paralela.** Com mais de uma
+  raiz (ex.: vários discos no Windows), cada disco é varrido em uma thread
+  própria (`ThreadPoolExecutor` + fila, sentinela por disco), com
+  deduplicação de repositórios repetidos entre raízes. Threads (e não
+  asyncio) porque `os.walk` é bloqueante e o gargalo é I/O de disco — mesmo
+  modelo do fetch paralelo já existente. Com uma raiz só (Linux/macOS), o
+  caminho sequencial simples é mantido.
+- **Validação:** 9 testes novos (parse de mounts Linux com escapes octais e
+  fstypes de rede, parse do `mount` BSD/macOS, poda de `skip_paths`,
+  varredura multi-raiz paralela, deduplicação, relançamento via subprocess
+  e guarda de versão do Python); suíte completa com 47 testes passando;
+  `mount_skip_paths()` validado na máquina real (21 montagens virtuais
+  detectadas e puladas).
+- **Limite conhecido:** a paralelização é por disco/raiz; no Linux/macOS a
+  varredura automática usa uma raiz única (`/`), então não há ganho de
+  paralelismo nesse modo — dividir uma raiz em sub-árvores paralelas fica
+  como convite a contribuição.
