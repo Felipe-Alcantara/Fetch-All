@@ -12,8 +12,10 @@ from fetchall import cache as cache_module
 from fetchall import config as config_module
 from fetchall.cache import load_cache, save_cache
 from fetchall.config import DEFAULT_EXCLUDES, Config, load_config, save_config
+from fetchall import scanner as scanner_module
 from fetchall.scanner import (
     find_git_repos,
+    local_mount_points,
     parse_bsd_mount_skips,
     parse_linux_mount_skips,
     resolve_scan_roots,
@@ -80,6 +82,18 @@ class ScannerTests(unittest.TestCase):
         found = list(find_git_repos([str(self.base), str(self.base)], []))
         self.assertEqual(len(found), 1)
 
+    def test_nested_roots_are_split_between_threads_without_duplicates(self) -> None:
+        # Simula "/" e um disco montado dentro dele (ex.: /mnt/dados):
+        # a raiz-mãe não desce na raiz aninhada, que tem thread própria.
+        _fake_repo(self.base / "projeto-raiz")
+        _fake_repo(self.base / "montado" / "projeto-disco")
+        found = sorted(
+            p.name for p in find_git_repos(
+                [str(self.base), str(self.base / "montado")], []
+            )
+        )
+        self.assertEqual(found, ["projeto-disco", "projeto-raiz"])
+
     def test_skip_paths_prune_mount_points(self) -> None:
         # Simula uma montagem virtual/de rede dentro da árvore varrida.
         _fake_repo(self.base / "projeto")
@@ -136,6 +150,35 @@ class MountParsingTests(unittest.TestCase):
         self.assertEqual(
             skips, {"/dev", "/System/Volumes/Data/home", "/Volumes/share"}
         )
+
+    def test_local_mount_points_one_root_per_local_disk(self) -> None:
+        mounts = [
+            ("/", "ext4"),
+            ("/home", "ext4"),               # partição própria: raiz paralela
+            ("/mnt/win", "fuseblk"),         # ntfs-3g: disco local
+            ("/boot/efi", "vfat"),           # sistema: fora
+            ("/mnt/nas", "nfs4"),            # rede: fora
+            ("/proc", "proc"),               # virtual: fora
+            ("/media/felipe/pen", "exfat"),  # removível: raiz paralela
+        ]
+        self.assertEqual(
+            local_mount_points(mounts),
+            ["/", "/home", "/media/felipe/pen", "/mnt/win"],
+        )
+
+    def test_local_mount_points_on_macos_skip_system_volumes(self) -> None:
+        mounts = [
+            ("/", "apfs"),
+            ("/System/Volumes/Data", "apfs"),  # firmlink: duplicaria "/"
+            ("/Volumes/Backup", "apfs"),
+        ]
+        with mock.patch.object(scanner_module.sys, "platform", "darwin"):
+            self.assertEqual(
+                local_mount_points(mounts), ["/", "/Volumes/Backup"]
+            )
+
+    def test_local_mount_points_fall_back_to_root(self) -> None:
+        self.assertEqual(local_mount_points([]), ["/"])
 
 
 class ConfigTests(unittest.TestCase):

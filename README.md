@@ -85,10 +85,12 @@ Funciona em qualquer sistema operacional:
 
 - **Windows** — enumera as unidades pela API do sistema (rede e CD/DVD
   ficam de fora); em Python anterior ao 3.12 usa um fallback equivalente.
-- **Linux/macOS/BSD** — varre a partir de `/` pulando pontos de montagem
-  virtuais (`/proc`, `/sys`, snaps, tmpfs…) e de rede (NFS, SMB, sshfs…),
-  lidos de `/proc/mounts` ou do comando `mount`; discos NTFS montados via
-  ntfs-3g continuam dentro da varredura.
+- **Linux/macOS/BSD** — cada disco/partição local montado (`/`, `/mnt/…`,
+  `/media/…`, `/Volumes/…`) vira uma raiz de varredura própria, varrida em
+  paralelo com as demais; pontos de montagem virtuais (`/proc`, `/sys`,
+  snaps, tmpfs…) e de rede (NFS, SMB, sshfs…) são pulados, lidos de
+  `/proc/mounts` ou do comando `mount`. Discos NTFS montados via ntfs-3g
+  continuam dentro da varredura.
 
 ### ⚡ Cache de varredura (`fetchall/cache.py`)
 Após a primeira varredura completa, as execuções seguintes podem usar a
@@ -181,8 +183,8 @@ python3 -m unittest discover -s tests
 ## 🤝 Ideias para quem quiser contribuir
 
 - Exportar o registro das passadas também em JSON, para consumo por outras ferramentas.
-- Paralelizar a varredura dentro de uma mesma raiz (hoje o paralelismo é por
-  disco; no Linux/macOS a varredura automática usa uma raiz única `/`).
+- Paralelizar a varredura dentro de um mesmo disco (hoje o paralelismo é um
+  disco/partição por thread; sub-árvores de um mesmo disco são sequenciais).
 - Agendamento periódico da sincronização.
 - Suporte a criar upstream automaticamente (`push -u`) mediante confirmação.
 

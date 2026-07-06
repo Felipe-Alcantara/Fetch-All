@@ -45,38 +45,64 @@ def _is_skipped_fstype(fstype: str) -> bool:
     return fstype in _SKIP_FSTYPES or fstype.startswith(_SKIP_FSTYPE_PREFIXES)
 
 
-def parse_linux_mount_skips(lines: list[str]) -> set[str]:
-    """Extrai de linhas no formato do ``/proc/mounts`` os pontos a pular.
+def parse_linux_mounts(lines: list[str]) -> list[tuple[str, str]]:
+    """Extrai ``(ponto_de_montagem, fstype)`` de linhas do ``/proc/mounts``.
 
     Formato: ``origem ponto_de_montagem fstype opções …``. Espaços e tabs
     no caminho vêm como escapes octais (``\\040``/``\\011``).
     """
-    skips: set[str] = set()
+    mounts: list[tuple[str, str]] = []
     for line in lines:
         parts = line.split()
         if len(parts) < 3:
             continue
         mount_point = parts[1].replace("\\040", " ").replace("\\011", "\t")
-        if _is_skipped_fstype(parts[2]):
-            skips.add(mount_point)
-    return skips
+        mounts.append((mount_point, parts[2]))
+    return mounts
 
 
-def parse_bsd_mount_skips(lines: list[str]) -> set[str]:
-    """Extrai da saída do comando ``mount`` (macOS/BSD) os pontos a pular.
+def parse_bsd_mounts(lines: list[str]) -> list[tuple[str, str]]:
+    """Extrai ``(ponto_de_montagem, fstype)`` da saída do ``mount`` (macOS/BSD).
 
     Formato: ``origem on /ponto (fstype, opções…)``.
     """
-    skips: set[str] = set()
+    mounts: list[tuple[str, str]] = []
     for line in lines:
         if " on " not in line or "(" not in line:
             continue
         rest = line.split(" on ", 1)[1]
         mount_point, _, info = rest.rpartition(" (")
         fstype = info.split(",")[0].strip().rstrip(")")
-        if mount_point and _is_skipped_fstype(fstype):
-            skips.add(mount_point)
-    return skips
+        if mount_point:
+            mounts.append((mount_point, fstype))
+    return mounts
+
+
+def parse_linux_mount_skips(lines: list[str]) -> set[str]:
+    """Pontos de montagem virtuais/de rede em linhas do ``/proc/mounts``."""
+    return {mp for mp, fstype in parse_linux_mounts(lines) if _is_skipped_fstype(fstype)}
+
+
+def parse_bsd_mount_skips(lines: list[str]) -> set[str]:
+    """Pontos de montagem virtuais/de rede na saída do ``mount`` (macOS/BSD)."""
+    return {mp for mp, fstype in parse_bsd_mounts(lines) if _is_skipped_fstype(fstype)}
+
+
+def _list_mounts() -> list[tuple[str, str]]:
+    """Todas as montagens do sistema como ``(ponto, fstype)``; vazio se ilegível."""
+    try:
+        proc_mounts = Path("/proc/mounts")
+        if proc_mounts.exists():
+            lines = proc_mounts.read_text(encoding="utf-8", errors="replace").splitlines()
+            return parse_linux_mounts(lines)
+        result = subprocess.run(
+            ["mount"], capture_output=True, text=True, timeout=10
+        )
+        if result.returncode == 0:
+            return parse_bsd_mounts(result.stdout.splitlines())
+    except (OSError, subprocess.SubprocessError):
+        pass
+    return []
 
 
 def mount_skip_paths() -> set[str]:
@@ -88,19 +114,31 @@ def mount_skip_paths() -> set[str]:
     """
     if sys.platform == "win32":
         return set()
-    try:
-        proc_mounts = Path("/proc/mounts")
-        if proc_mounts.exists():
-            lines = proc_mounts.read_text(encoding="utf-8", errors="replace").splitlines()
-            return parse_linux_mount_skips(lines)
-        result = subprocess.run(
-            ["mount"], capture_output=True, text=True, timeout=10
-        )
-        if result.returncode == 0:
-            return parse_bsd_mount_skips(result.stdout.splitlines())
-    except (OSError, subprocess.SubprocessError):
-        pass
+    mounts = _list_mounts()
+    if mounts:
+        return {mp for mp, fstype in mounts if _is_skipped_fstype(fstype)}
     return set(_FALLBACK_SKIP_PATHS)
+
+
+def local_mount_points(mounts: list[tuple[str, str]] | None = None) -> list[str]:
+    """Raízes de varredura no POSIX: ``/`` mais cada disco/partição local.
+
+    Cada montagem local vira uma raiz própria para ser varrida em paralelo
+    (um disco por thread). Ficam de fora as montagens virtuais/de rede,
+    ``/boot`` (nunca tem repositório do usuário) e, no macOS, tudo sob
+    ``/System`` — o volume de dados já é alcançado a partir de ``/`` pelos
+    firmlinks, e listá-lo de novo duplicaria a varredura.
+    """
+    if mounts is None:
+        mounts = _list_mounts()
+    points = {
+        mp for mp, fstype in mounts
+        if not _is_skipped_fstype(fstype)
+        and mp != "/"
+        and mp != "/boot" and not mp.startswith("/boot/")
+        and not (sys.platform == "darwin" and mp.startswith("/System/"))
+    }
+    return ["/"] + sorted(points)
 
 
 def _windows_drive_letters() -> list[str]:
@@ -121,11 +159,13 @@ def list_local_drives() -> list[str]:
     """Devolve as raízes de todos os discos locais (fixos e removíveis).
 
     No Windows usa a API do sistema para ignorar unidades de rede e de
-    CD/DVD. Em outros sistemas devolve a raiz do sistema de arquivos —
-    as montagens virtuais e de rede são puladas durante a varredura.
+    CD/DVD. No Linux/macOS devolve ``/`` mais cada disco/partição local
+    montado (``/mnt/…``, ``/media/…``, ``/Volumes/…``), para a varredura
+    acontecer em todos os discos ao mesmo tempo; montagens virtuais e de
+    rede são puladas.
     """
     if sys.platform != "win32":
-        return ["/"]
+        return local_mount_points()
     import ctypes
 
     DRIVE_REMOVABLE, DRIVE_FIXED = 2, 3
@@ -176,10 +216,12 @@ def find_git_repos(
     """
     excludes = {name.lower() for name in exclude_dirs}
     skips = mount_skip_paths() if skip_paths is None else skip_paths
-    roots = [Path(root) for root in scan_roots if Path(root).exists()]
+    roots = list(dict.fromkeys(
+        Path(root) for root in scan_roots if Path(root).exists()
+    ))
     seen: set[Path] = set()
 
-    # Uma raiz só (ex.: "/" no Linux/macOS): caminho simples, sem threads.
+    # Uma raiz só: caminho simples, sem threads.
     if len(roots) <= 1:
         for root_path in roots:
             for repo in _walk_root(root_path, excludes, skips):
@@ -190,11 +232,17 @@ def find_git_repos(
 
     # Várias raízes: uma thread por disco, resultados via fila conforme
     # cada varredura avança. ``None`` é a sentinela de "este disco acabou".
+    # Cada raiz pula as outras raízes aninhadas nela (ex.: "/" não desce em
+    # "/mnt/dados", que já tem thread própria) para não varrer nada duas vezes.
     results: queue.Queue[Path | None] = queue.Queue()
 
     def scan_one(root_path: Path) -> None:
+        nested_roots = {
+            str(other) for other in roots
+            if other != root_path and other.is_relative_to(root_path)
+        }
         try:
-            for repo in _walk_root(root_path, excludes, skips):
+            for repo in _walk_root(root_path, excludes, skips | nested_roots):
                 results.put(repo)
         finally:
             results.put(None)

@@ -165,3 +165,33 @@ todos os projetos subiram ao remoto antes de uma troca de máquina.
   varredura automática usa uma raiz única (`/`), então não há ganho de
   paralelismo nesse modo — dividir uma raiz em sub-árvores paralelas fica
   como convite a contribuição.
+
+### 2026-07-06 — Paralelismo por disco também no Linux/macOS
+
+- **Melhoria (fechando o limite registrado acima):** no POSIX, cada
+  disco/partição local montado agora vira uma raiz de varredura própria
+  (`local_mount_points`): `/` mais `/mnt/…`, `/media/…`, `/Volumes/…` etc.,
+  cada um em sua thread — a varredura acontece em todos os discos ao mesmo
+  tempo também fora do Windows.
+- **Decisões:**
+  - Cada raiz poda as outras raízes aninhadas nela (ex.: `/` não desce em
+    `/home` quando `/home` é partição própria com thread própria), para
+    nada ser varrido duas vezes.
+  - `/boot` fica de fora (nunca tem repositório do usuário); no macOS,
+    montagens sob `/System/` ficam de fora porque o volume de dados já é
+    alcançado por `/` via firmlinks — listá-lo duplicaria a varredura.
+  - `parse_linux_mounts`/`parse_bsd_mounts` passam a devolver pares
+    `(ponto, fstype)`; as funções de skip são derivadas delas, e
+    `local_mount_points` aceita a lista injetada para testes.
+  - Raízes repetidas são deduplicadas antes de criar threads.
+- **Efeito colateral aceito:** a lista de raízes muda em relação à versão
+  anterior (ex.: `["/"]` → `["/", "/mnt/dados"]`), invalidando o cache de
+  varredura uma vez — comportamento correto do `matches_roots`.
+- **Validação:** 4 testes novos (raiz por disco local com ntfs-3g dentro e
+  rede/virtual/boot fora, filtro de `/System` no macOS, fallback para `/`,
+  raízes aninhadas sem duplicar repositórios); suíte completa com 51 testes
+  passando. Na máquina real (1 disco: `/` ext4 + `/boot/efi` filtrada) as
+  raízes resolvem para `["/"]`, como esperado.
+- **Limite conhecido (atualizado):** sub-árvores de um mesmo disco ainda são
+  sequenciais; paralelizar dentro de um disco segue como convite a
+  contribuição.
