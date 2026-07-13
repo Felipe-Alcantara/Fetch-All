@@ -37,6 +37,13 @@ _SKIP_FSTYPES = {
 _SKIP_FSTYPE_PREFIXES = ("nfs", "cgroup", "fuse.")
 # Se a lista de montagens não puder ser lida, pula ao menos o essencial.
 _FALLBACK_SKIP_PATHS = frozenset({"/proc", "/sys", "/dev", "/run"})
+# macOS: tudo o que interessa no volume de dados já aparece a partir de "/"
+# pelos firmlinks (/Users, /Applications, /Volumes…). Descer em
+# /System/Volumes varreria o volume inteiro uma segunda vez, incluindo os
+# discos externos (que reaparecem em /System/Volumes/Data/Volumes/…, fora do
+# alcance da poda de raízes aninhadas) e o instantâneo do sistema em
+# /System/Volumes/Update/mnt1.
+_DARWIN_SKIP_PATHS = frozenset({"/System/Volumes"})
 
 
 def _is_skipped_fstype(fstype: str) -> bool:
@@ -111,13 +118,18 @@ def mount_skip_paths() -> set[str]:
     No Windows devolve vazio (a seleção de discos já filtra por tipo).
     No Linux lê ``/proc/mounts``; no macOS/BSD usa o comando ``mount``;
     se nada disso funcionar, cai num mínimo seguro (``/proc``, ``/sys``…).
+    No macOS soma ``/System/Volumes``, que espelha o volume de dados inteiro.
     """
     if sys.platform == "win32":
         return set()
     mounts = _list_mounts()
     if mounts:
-        return {mp for mp, fstype in mounts if _is_skipped_fstype(fstype)}
-    return set(_FALLBACK_SKIP_PATHS)
+        skips = {mp for mp, fstype in mounts if _is_skipped_fstype(fstype)}
+    else:
+        skips = set(_FALLBACK_SKIP_PATHS)
+    if sys.platform == "darwin":
+        skips |= _DARWIN_SKIP_PATHS
+    return skips
 
 
 def local_mount_points(mounts: list[tuple[str, str]] | None = None) -> list[str]:

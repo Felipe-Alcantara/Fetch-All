@@ -39,6 +39,10 @@ DEFAULT_EXCLUDES = [
     # repositórios git internos) e pastas de sistema.
     "lost+found",
     ".cache",
+    # macOS: drives de nuvem (Google Drive, OneDrive…) montados como pasta
+    # local em ~/Library/CloudStorage — enumerar força download de metadados
+    # da rede, arquivo a arquivo, e pode levar horas.
+    "CloudStorage",
     "snap",
     ".Trash",
     ".Trashes",
