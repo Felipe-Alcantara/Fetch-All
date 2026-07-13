@@ -16,6 +16,7 @@ from fetchall import scanner as scanner_module
 from fetchall.scanner import (
     find_git_repos,
     local_mount_points,
+    mount_skip_paths,
     parse_bsd_mount_skips,
     parse_linux_mount_skips,
     resolve_scan_roots,
@@ -179,6 +180,25 @@ class MountParsingTests(unittest.TestCase):
 
     def test_local_mount_points_fall_back_to_root(self) -> None:
         self.assertEqual(local_mount_points([]), ["/"])
+
+    def test_macos_skips_system_volumes_during_walk(self) -> None:
+        # Varrer "/" no macOS descia em /System/Volumes/Data e revarria o
+        # volume inteiro — inclusive os discos externos, que reaparecem em
+        # /System/Volumes/Data/Volumes/… e escapam da poda de raízes aninhadas.
+        mounts = [("/", "apfs"), ("/System/Volumes/Data", "apfs"), ("/dev", "devfs")]
+        with (
+            mock.patch.object(scanner_module.sys, "platform", "darwin"),
+            mock.patch.object(scanner_module, "_list_mounts", return_value=mounts),
+        ):
+            self.assertEqual(mount_skip_paths(), {"/dev", "/System/Volumes"})
+
+    def test_linux_does_not_skip_system_volumes(self) -> None:
+        mounts = [("/", "ext4"), ("/proc", "proc")]
+        with (
+            mock.patch.object(scanner_module.sys, "platform", "linux"),
+            mock.patch.object(scanner_module, "_list_mounts", return_value=mounts),
+        ):
+            self.assertEqual(mount_skip_paths(), {"/proc"})
 
 
 class ConfigTests(unittest.TestCase):
