@@ -14,6 +14,7 @@ from fetchall.cache import load_cache, save_cache
 from fetchall.config import DEFAULT_EXCLUDES, Config, load_config, save_config
 from fetchall import scanner as scanner_module
 from fetchall.scanner import (
+    darwin_cloudstorage_paths,
     find_git_repos,
     local_mount_points,
     mount_skip_paths,
@@ -189,8 +190,16 @@ class MountParsingTests(unittest.TestCase):
         with (
             mock.patch.object(scanner_module.sys, "platform", "darwin"),
             mock.patch.object(scanner_module, "_list_mounts", return_value=mounts),
+            mock.patch.object(
+                scanner_module,
+                "darwin_cloudstorage_paths",
+                return_value={"/Users/ana/Library/CloudStorage"},
+            ),
         ):
-            self.assertEqual(mount_skip_paths(), {"/dev", "/System/Volumes"})
+            self.assertEqual(
+                mount_skip_paths(),
+                {"/dev", "/System/Volumes", "/Users/ana/Library/CloudStorage"},
+            )
 
     def test_linux_does_not_skip_system_volumes(self) -> None:
         mounts = [("/", "ext4"), ("/proc", "proc")]
@@ -199,6 +208,23 @@ class MountParsingTests(unittest.TestCase):
             mock.patch.object(scanner_module, "_list_mounts", return_value=mounts),
         ):
             self.assertEqual(mount_skip_paths(), {"/proc"})
+
+    def test_darwin_cloudstorage_paths_only_where_folder_exists(self) -> None:
+        # A poda de drives de nuvem é por caminho exato (~/Library/CloudStorage
+        # de cada usuário), não por nome de pasta — um projeto chamado
+        # "CloudStorage" em outro lugar continua sendo varrido.
+        users = Path(tempfile.mkdtemp(prefix="fetchall-users-"))
+        self.addCleanup(shutil.rmtree, users, ignore_errors=True)
+        (users / "ana" / "Library" / "CloudStorage").mkdir(parents=True)
+        (users / "bia" / "Library").mkdir(parents=True)  # sem CloudStorage
+        (users / "Shared").mkdir()
+        self.assertEqual(
+            darwin_cloudstorage_paths(str(users)),
+            {str(users / "ana" / "Library" / "CloudStorage")},
+        )
+
+    def test_darwin_cloudstorage_paths_missing_users_root(self) -> None:
+        self.assertEqual(darwin_cloudstorage_paths("/nao-existe"), set())
 
 
 class ConfigTests(unittest.TestCase):

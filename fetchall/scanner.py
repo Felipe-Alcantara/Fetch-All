@@ -46,6 +46,26 @@ _FALLBACK_SKIP_PATHS = frozenset({"/proc", "/sys", "/dev", "/run"})
 _DARWIN_SKIP_PATHS = frozenset({"/System/Volumes"})
 
 
+def darwin_cloudstorage_paths(users_root: str = "/Users") -> set[str]:
+    """Pastas ``Library/CloudStorage`` de cada usuário do macOS.
+
+    Drives de nuvem (Google Drive, OneDrive…) montados ali via File Provider
+    buscam metadados na rede a cada ``readdir`` — enumerar pode levar horas.
+    A poda é por caminho exato para não excluir, em outro SO ou lugar, uma
+    pasta de projeto que por acaso se chame "CloudStorage".
+    """
+    try:
+        entries = os.listdir(users_root)
+    except OSError:
+        return set()
+    paths = set()
+    for entry in entries:
+        candidate = os.path.join(users_root, entry, "Library", "CloudStorage")
+        if os.path.isdir(candidate):
+            paths.add(candidate)
+    return paths
+
+
 def _is_skipped_fstype(fstype: str) -> bool:
     """Indica se um tipo de filesystem é virtual ou de rede."""
     fstype = fstype.lower()
@@ -118,7 +138,9 @@ def mount_skip_paths() -> set[str]:
     No Windows devolve vazio (a seleção de discos já filtra por tipo).
     No Linux lê ``/proc/mounts``; no macOS/BSD usa o comando ``mount``;
     se nada disso funcionar, cai num mínimo seguro (``/proc``, ``/sys``…).
-    No macOS soma ``/System/Volumes``, que espelha o volume de dados inteiro.
+    No macOS soma ``/System/Volumes`` (que espelha o volume de dados
+    inteiro) e as pastas ``~/Library/CloudStorage`` (drives de nuvem que
+    fazem I/O de rede a cada listagem).
     """
     if sys.platform == "win32":
         return set()
@@ -129,6 +151,7 @@ def mount_skip_paths() -> set[str]:
         skips = set(_FALLBACK_SKIP_PATHS)
     if sys.platform == "darwin":
         skips |= _DARWIN_SKIP_PATHS
+        skips |= darwin_cloudstorage_paths()
     return skips
 
 

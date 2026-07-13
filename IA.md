@@ -195,3 +195,26 @@ todos os projetos subiram ao remoto antes de uma troca de máquina.
 - **Limite conhecido (atualizado):** sub-árvores de um mesmo disco ainda são
   sequenciais; paralelizar dentro de um disco segue como convite a
   contribuição.
+
+### 2026-07-13 — Varredura no macOS: /System/Volumes e drives de nuvem (PR #1)
+
+- **Contribuição externa (PR #1, @flaviavs-commits):** no macOS a varredura
+  completa ficava presa 20+ minutos. Duas causas: descer em
+  `/System/Volumes/Data` (espelho do volume de dados inteiro via firmlinks,
+  com os discos externos reaparecendo em `/System/Volumes/Data/Volumes/…`,
+  fora do alcance da poda de raízes aninhadas) e enumerar
+  `~/Library/CloudStorage` (Google Drive/OneDrive via File Provider fazem
+  I/O de rede a cada `readdir`). Resultado relatado: de 20+ min para ~41 s.
+- **Aplicado do PR:** `mount_skip_paths()` soma `/System/Volumes` quando
+  `sys.platform == "darwin"` (`_DARWIN_SKIP_PATHS`), inclusive no caminho de
+  fallback; 2 testes travam o comportamento (darwin ganha o skip, Linux não).
+- **Adaptação pós-merge:** o PR colocava `"CloudStorage"` nas exclusões
+  padrão por **nome**, valendo para todos os SOs — uma pasta de projeto
+  chamada `CloudStorage` no Linux/Windows sumiria da varredura em silêncio.
+  Trocado por poda por **caminho exato**: `darwin_cloudstorage_paths()`
+  enumera `~/Library/CloudStorage` de cada usuário em `/Users` e soma ao
+  `mount_skip_paths()` só no macOS. A função aceita `users_root` injetável
+  para testes e devolve vazio se `/Users` não existir.
+- **Validação:** 2 testes novos (poda só onde a pasta existe, com usuário
+  sem CloudStorage e `/Users` inexistente) + teste do darwin atualizado;
+  suíte completa com 55 testes passando.
