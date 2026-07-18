@@ -58,7 +58,6 @@ class BuildRunReportTests(unittest.TestCase):
         self.assertIn("push FALHOU: erro de rede", text)
         self.assertIn("1 item(ns) exigem atenção manual", text)
 
-
     def test_auto_committed_repo_is_not_listed_as_pending(self) -> None:
         dirty = _status("a", RepoState.DIRTY, detail="1 arquivo(s)")
         plan = SyncPlan(problems=[dirty])
@@ -72,6 +71,13 @@ class BuildRunReportTests(unittest.TestCase):
         self.assertIn("push enviado ao remoto", text)
         self.assertIn("Nenhuma pendência", text)
         self.assertNotIn(RepoState.DIRTY.value, text)
+
+    def test_external_text_cannot_inject_markdown_lines(self) -> None:
+        problem = _status("repo`estranho", RepoState.GIT_ERROR, detail="erro\n## injetado")
+        plan = SyncPlan(problems=[problem])
+        text = build_run_report(plan, [], executed=False, scan_mode="completa", when=WHEN)
+        self.assertNotIn("\n## injetado", text)
+        self.assertIn("erro ## injetado", text)
 
 
 class WriteRunReportTests(unittest.TestCase):

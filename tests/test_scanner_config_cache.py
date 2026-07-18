@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import shutil
 import tempfile
 import unittest
@@ -10,9 +11,9 @@ from unittest import mock
 
 from fetchall import cache as cache_module
 from fetchall import config as config_module
+from fetchall import scanner as scanner_module
 from fetchall.cache import load_cache, save_cache
 from fetchall.config import DEFAULT_EXCLUDES, Config, load_config, save_config
-from fetchall import scanner as scanner_module
 from fetchall.scanner import (
     darwin_cloudstorage_paths,
     find_git_repos,
@@ -73,9 +74,8 @@ class ScannerTests(unittest.TestCase):
         _fake_repo(self.base / "disco-b" / "projeto-b")
         _fake_repo(self.base / "disco-b" / "pasta" / "projeto-c")
         found = sorted(
-            p.name for p in find_git_repos(
-                [str(self.base / "disco-a"), str(self.base / "disco-b")], []
-            )
+            p.name
+            for p in find_git_repos([str(self.base / "disco-a"), str(self.base / "disco-b")], [])
         )
         self.assertEqual(found, ["projeto-a", "projeto-b", "projeto-c"])
 
@@ -90,9 +90,7 @@ class ScannerTests(unittest.TestCase):
         _fake_repo(self.base / "projeto-raiz")
         _fake_repo(self.base / "montado" / "projeto-disco")
         found = sorted(
-            p.name for p in find_git_repos(
-                [str(self.base), str(self.base / "montado")], []
-            )
+            p.name for p in find_git_repos([str(self.base), str(self.base / "montado")], [])
         )
         self.assertEqual(found, ["projeto-disco", "projeto-raiz"])
 
@@ -102,7 +100,8 @@ class ScannerTests(unittest.TestCase):
         _fake_repo(self.base / "montagem-de-rede" / "repo-remoto")
         found = list(
             find_git_repos(
-                [str(self.base)], [],
+                [str(self.base)],
+                [],
                 skip_paths={str(self.base / "montagem-de-rede")},
             )
         )
@@ -136,9 +135,7 @@ class MountParsingTests(unittest.TestCase):
 
     def test_linux_mounts_decode_octal_escaped_spaces(self) -> None:
         lines = [r"tmpfs /mnt/pasta\040com\040espaço tmpfs rw 0 0"]
-        self.assertEqual(
-            parse_linux_mount_skips(lines), {"/mnt/pasta com espaço"}
-        )
+        self.assertEqual(parse_linux_mount_skips(lines), {"/mnt/pasta com espaço"})
 
     def test_bsd_mount_output_skip_virtual(self) -> None:
         lines = [
@@ -149,18 +146,16 @@ class MountParsingTests(unittest.TestCase):
             "/dev/disk4s1 on /Volumes/Backup (apfs, local, journaled)",
         ]
         skips = parse_bsd_mount_skips(lines)
-        self.assertEqual(
-            skips, {"/dev", "/System/Volumes/Data/home", "/Volumes/share"}
-        )
+        self.assertEqual(skips, {"/dev", "/System/Volumes/Data/home", "/Volumes/share"})
 
     def test_local_mount_points_one_root_per_local_disk(self) -> None:
         mounts = [
             ("/", "ext4"),
-            ("/home", "ext4"),               # partição própria: raiz paralela
-            ("/mnt/win", "fuseblk"),         # ntfs-3g: disco local
-            ("/boot/efi", "vfat"),           # sistema: fora
-            ("/mnt/nas", "nfs4"),            # rede: fora
-            ("/proc", "proc"),               # virtual: fora
+            ("/home", "ext4"),  # partição própria: raiz paralela
+            ("/mnt/win", "fuseblk"),  # ntfs-3g: disco local
+            ("/boot/efi", "vfat"),  # sistema: fora
+            ("/mnt/nas", "nfs4"),  # rede: fora
+            ("/proc", "proc"),  # virtual: fora
             ("/media/felipe/pen", "exfat"),  # removível: raiz paralela
         ]
         self.assertEqual(
@@ -175,9 +170,7 @@ class MountParsingTests(unittest.TestCase):
             ("/Volumes/Backup", "apfs"),
         ]
         with mock.patch.object(scanner_module.sys, "platform", "darwin"):
-            self.assertEqual(
-                local_mount_points(mounts), ["/", "/Volumes/Backup"]
-            )
+            self.assertEqual(local_mount_points(mounts), ["/", "/Volumes/Backup"])
 
     def test_local_mount_points_fall_back_to_root(self) -> None:
         self.assertEqual(local_mount_points([]), ["/"])
@@ -231,9 +224,7 @@ class ConfigTests(unittest.TestCase):
     def setUp(self) -> None:
         self.base = Path(tempfile.mkdtemp(prefix="fetchall-cfg-"))
         self.addCleanup(shutil.rmtree, self.base, ignore_errors=True)
-        patcher = mock.patch.object(
-            config_module, "CONFIG_PATH", self.base / "config.json"
-        )
+        patcher = mock.patch.object(config_module, "CONFIG_PATH", self.base / "config.json")
         patcher.start()
         self.addCleanup(patcher.stop)
 
@@ -263,14 +254,32 @@ class ConfigTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             load_config()
 
+    def test_rejects_invalid_field_types_and_worker_limits(self) -> None:
+        invalid_documents = [
+            [],
+            {"scan_roots": "C:\\Projetos"},
+            {"exclude_dirs": ["ok", 123]},
+            {"max_workers": True},
+            {"max_workers": 0},
+            {"max_workers": 257},
+        ]
+        for document in invalid_documents:
+            with self.subTest(document=document):
+                config_module.CONFIG_PATH.write_text(json.dumps(document), encoding="utf-8")
+                with self.assertRaisesRegex(ValueError, "config.json inválido"):
+                    load_config()
+
+    def test_save_rejects_invalid_in_memory_config(self) -> None:
+        with self.assertRaises(ValueError):
+            save_config(Config(max_workers=0))
+        self.assertFalse(config_module.CONFIG_PATH.exists())
+
 
 class CacheTests(unittest.TestCase):
     def setUp(self) -> None:
         self.base = Path(tempfile.mkdtemp(prefix="fetchall-cache-"))
         self.addCleanup(shutil.rmtree, self.base, ignore_errors=True)
-        patcher = mock.patch.object(
-            cache_module, "CACHE_PATH", self.base / "scan_cache.json"
-        )
+        patcher = mock.patch.object(cache_module, "CACHE_PATH", self.base / "scan_cache.json")
         patcher.start()
         self.addCleanup(patcher.stop)
 
@@ -293,6 +302,13 @@ class CacheTests(unittest.TestCase):
 
     def test_corrupted_cache_is_treated_as_missing(self) -> None:
         cache_module.CACHE_PATH.write_text("{quebrado", encoding="utf-8")
+        self.assertIsNone(load_cache())
+
+    def test_cache_with_wrong_field_types_is_treated_as_missing(self) -> None:
+        cache_module.CACHE_PATH.write_text(
+            '{"scanned_at":"2026-07-18T10:00:00","roots":"/","repos":[]}',
+            encoding="utf-8",
+        )
         self.assertIsNone(load_cache())
 
 

@@ -39,9 +39,16 @@ def show_plan(plan: SyncPlan) -> None:
         table.add_column("Ação", style="cyan")
         table.add_column("Commits")
         for status in plan.to_pull:
-            table.add_row(escape(str(status.path)), status.branch, "pull (fast-forward)", f"{status.behind} atrás")
+            table.add_row(
+                escape(str(status.path)),
+                status.branch,
+                "pull (fast-forward)",
+                f"{status.behind} atrás",
+            )
         for status in plan.to_push:
-            table.add_row(escape(str(status.path)), status.branch, "push", f"{status.ahead} à frente")
+            table.add_row(
+                escape(str(status.path)), status.branch, "push", f"{status.ahead} à frente"
+            )
         console.print(table)
 
     if plan.problems:
@@ -54,7 +61,12 @@ def show_plan(plan: SyncPlan) -> None:
         table.add_column("Problema", style="red")
         table.add_column("Detalhe", overflow="fold")
         for status in plan.problems:
-            table.add_row(escape(str(status.path)), status.branch or "—", status.state.value, escape(status.detail))
+            table.add_row(
+                escape(str(status.path)),
+                status.branch or "—",
+                status.state.value,
+                escape(status.detail),
+            )
         console.print(table)
 
     if not plan.has_actions and not plan.problems:
@@ -85,7 +97,8 @@ def show_results(results: list[ActionResult]) -> None:
         outcome = "[green]ok[/green]" if result.ok else "[red]FALHOU[/red]"
         # Falhas mostram a mensagem completa do git; sucessos, só a última linha.
         message = (
-            result.message if not result.ok
+            result.message
+            if not result.ok
             else (result.message.splitlines()[-1] if result.message else "")
         )
         table.add_row(escape(str(result.status.path)), result.action, outcome, escape(message))

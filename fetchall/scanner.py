@@ -26,11 +26,37 @@ from pathlib import Path
 # Sistemas de arquivos que nunca contêm repositórios locais do usuário:
 # pseudo-filesystems do kernel, caches em memória e montagens de rede.
 _SKIP_FSTYPES = {
-    "proc", "procfs", "sysfs", "devtmpfs", "devpts", "devfs", "tmpfs",
-    "ramfs", "squashfs", "overlay", "autofs", "mqueue", "hugetlbfs",
-    "debugfs", "tracefs", "securityfs", "pstore", "efivarfs", "bpf",
-    "binfmt_misc", "configfs", "fusectl", "rpc_pipefs", "selinuxfs",
-    "cifs", "smbfs", "smb3", "afs", "9p", "v9fs", "map",
+    "proc",
+    "procfs",
+    "sysfs",
+    "devtmpfs",
+    "devpts",
+    "devfs",
+    "tmpfs",
+    "ramfs",
+    "squashfs",
+    "overlay",
+    "autofs",
+    "mqueue",
+    "hugetlbfs",
+    "debugfs",
+    "tracefs",
+    "securityfs",
+    "pstore",
+    "efivarfs",
+    "bpf",
+    "binfmt_misc",
+    "configfs",
+    "fusectl",
+    "rpc_pipefs",
+    "selinuxfs",
+    "cifs",
+    "smbfs",
+    "smb3",
+    "afs",
+    "9p",
+    "v9fs",
+    "map",
 }
 # Famílias inteiras a pular; "fuse." cobre sshfs/gvfs, mas NÃO "fuseblk"
 # (ntfs-3g), que é disco local de verdade.
@@ -122,9 +148,7 @@ def _list_mounts() -> list[tuple[str, str]]:
         if proc_mounts.exists():
             lines = proc_mounts.read_text(encoding="utf-8", errors="replace").splitlines()
             return parse_linux_mounts(lines)
-        result = subprocess.run(
-            ["mount"], capture_output=True, text=True, timeout=10
-        )
+        result = subprocess.run(["mount"], capture_output=True, text=True, timeout=10)
         if result.returncode == 0:
             return parse_bsd_mounts(result.stdout.splitlines())
     except (OSError, subprocess.SubprocessError):
@@ -167,13 +191,15 @@ def local_mount_points(mounts: list[tuple[str, str]] | None = None) -> list[str]
     if mounts is None:
         mounts = _list_mounts()
     points = {
-        mp for mp, fstype in mounts
+        mp
+        for mp, fstype in mounts
         if not _is_skipped_fstype(fstype)
         and mp != "/"
-        and mp != "/boot" and not mp.startswith("/boot/")
+        and mp != "/boot"
+        and not mp.startswith("/boot/")
         and not (sys.platform == "darwin" and mp.startswith("/System/"))
     }
-    return ["/"] + sorted(points)
+    return ["/", *sorted(points)]
 
 
 def _windows_drive_letters() -> list[str]:
@@ -225,7 +251,8 @@ def _walk_root(root_path: Path, excludes: set[str], skips: set[str]) -> Iterator
         # Poda: não desce em .git, em pastas excluídas nem em montagens
         # virtuais/de rede.
         dirnames[:] = [
-            d for d in dirnames
+            d
+            for d in dirnames
             if d != ".git"
             and d.lower() not in excludes
             and (not skips or os.path.join(dirpath, d) not in skips)
@@ -251,9 +278,7 @@ def find_git_repos(
     """
     excludes = {name.lower() for name in exclude_dirs}
     skips = mount_skip_paths() if skip_paths is None else skip_paths
-    roots = list(dict.fromkeys(
-        Path(root) for root in scan_roots if Path(root).exists()
-    ))
+    roots = list(dict.fromkeys(Path(root) for root in scan_roots if Path(root).exists()))
     seen: set[Path] = set()
 
     # Uma raiz só: caminho simples, sem threads.
@@ -273,8 +298,7 @@ def find_git_repos(
 
     def scan_one(root_path: Path) -> None:
         nested_roots = {
-            str(other) for other in roots
-            if other != root_path and other.is_relative_to(root_path)
+            str(other) for other in roots if other != root_path and other.is_relative_to(root_path)
         }
         try:
             for repo in _walk_root(root_path, excludes, skips | nested_roots):
@@ -282,9 +306,7 @@ def find_git_repos(
         finally:
             results.put(None)
 
-    with ThreadPoolExecutor(
-        max_workers=len(roots), thread_name_prefix="fetchall-scan"
-    ) as pool:
+    with ThreadPoolExecutor(max_workers=len(roots), thread_name_prefix="fetchall-scan") as pool:
         for root_path in roots:
             pool.submit(scan_one, root_path)
         finished = 0

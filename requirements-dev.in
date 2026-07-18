@@ -1,0 +1,4 @@
+# Ferramentas de qualidade; não são necessárias para executar o aplicativo.
+coverage==7.15.2
+pip-audit==2.10.1
+ruff==0.15.22

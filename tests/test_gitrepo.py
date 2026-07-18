@@ -8,12 +8,15 @@ os estados problemáticos que nunca podem virar ação automática.
 from __future__ import annotations
 
 import shutil
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from fetchall import syncer
 from fetchall.gitrepo import RepoState, RepoStatus, analyze_repo, pull_ff_only, push
+from fetchall.security import redact_sensitive_text
 from tests.helpers import commit, git, make_remote_and_clone
 
 
@@ -30,7 +33,8 @@ class GitRepoStateTests(unittest.TestCase):
         other = self.base / "outro-clone"
         subprocess.run(
             ["git", "clone", str(self.remote), str(other)],
-            capture_output=True, check=True,
+            capture_output=True,
+            check=True,
         )
         return other
 
@@ -93,6 +97,11 @@ class GitRepoStateTests(unittest.TestCase):
         status = analyze_repo(self.clone, do_fetch=False)
         self.assertIs(status.state, RepoState.CONFLICT)
 
+    def test_rebase_directory_is_conflict_in_progress(self) -> None:
+        (self.clone / ".git" / "rebase-merge").mkdir()
+        status = analyze_repo(self.clone, do_fetch=False)
+        self.assertIs(status.state, RepoState.CONFLICT)
+
     def test_pull_ff_only_applies_remote_commit(self) -> None:
         other = self._second_clone()
         commit(other, "remoto.txt", "mudança de fora")
@@ -120,9 +129,15 @@ class GitRepoStateTests(unittest.TestCase):
         self.assertFalse(ok)  # --ff-only nunca cria merge
         self.assertTrue((self.clone / "local.txt").exists())  # nada perdido
 
-
-if __name__ == "__main__":
-    unittest.main()
+    def test_action_timeout_becomes_safe_failure(self) -> None:
+        status = RepoStatus(self.clone, RepoState.NEEDS_PULL)
+        with mock.patch(
+            "fetchall.gitrepo._git",
+            side_effect=subprocess.TimeoutExpired(["git", "pull"], 120),
+        ):
+            ok, message = pull_ff_only(status)
+        self.assertFalse(ok)
+        self.assertIn("tempo limite", message)
 
 
 class AutoCommitTests(unittest.TestCase):
@@ -169,3 +184,62 @@ class AutoCommitTests(unittest.TestCase):
         results = syncer.execute_auto_commits([status], "chore: teste")
         self.assertEqual([r.action for r in results], ["commit"])
         self.assertFalse(results[0].ok)
+
+    def test_changed_remote_state_refuses_auto_commit(self) -> None:
+        planned = RepoStatus(self.clone, RepoState.DIRTY, behind=0)
+        changed = RepoStatus(self.clone, RepoState.DIRTY, behind=1)
+        with (
+            mock.patch.object(syncer, "analyze_repo", return_value=changed),
+            mock.patch.object(syncer, "commit_all") as commit_all,
+        ):
+            results = syncer.execute_auto_commits([planned], "chore: teste")
+
+        self.assertEqual(len(results), 1)
+        self.assertFalse(results[0].ok)
+        self.assertIn("estado mudou", results[0].message)
+        commit_all.assert_not_called()
+
+
+class ExecutionSafetyTests(unittest.TestCase):
+    def test_changed_state_refuses_planned_pull(self) -> None:
+        planned = RepoStatus(Path("/repo"), RepoState.NEEDS_PULL, behind=1)
+        changed = RepoStatus(Path("/repo"), RepoState.DIRTY, dirty_files=[" M x"])
+        plan = syncer.SyncPlan(to_pull=[planned])
+        with (
+            mock.patch.object(syncer, "analyze_repo", return_value=changed),
+            mock.patch.object(syncer, "pull_ff_only") as pull,
+        ):
+            results = syncer.execute_plan(plan)
+
+        self.assertEqual(len(results), 1)
+        self.assertFalse(results[0].ok)
+        self.assertIn("nenhuma ação executada", results[0].message)
+        pull.assert_not_called()
+
+    def test_changed_state_refuses_planned_push(self) -> None:
+        planned = RepoStatus(Path("/repo"), RepoState.NEEDS_PUSH, ahead=1)
+        changed = RepoStatus(Path("/repo"), RepoState.DIVERGED, ahead=1, behind=1)
+        plan = syncer.SyncPlan(to_push=[planned])
+        with (
+            mock.patch.object(syncer, "analyze_repo", return_value=changed),
+            mock.patch.object(syncer, "push") as push_action,
+        ):
+            results = syncer.execute_plan(plan)
+
+        self.assertFalse(results[0].ok)
+        push_action.assert_not_called()
+
+
+class SecretRedactionTests(unittest.TestCase):
+    def test_redacts_url_credentials_parameters_and_github_tokens(self) -> None:
+        token = "ghp_" + "a" * 30
+        text = f"https://usuario:senha@example.com/repo?access_token=segredo token={token} {token}"
+        redacted = redact_sensitive_text(text)
+        self.assertNotIn("senha", redacted)
+        self.assertNotIn("segredo", redacted)
+        self.assertNotIn(token, redacted)
+        self.assertIn("https://***@example.com", redacted)
+
+
+if __name__ == "__main__":
+    unittest.main()

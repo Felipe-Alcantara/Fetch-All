@@ -2,8 +2,9 @@
 
 Fluxo em duas fases, para nada acontecer sem aviso prévio:
 
-1. ``scan_and_analyze`` — encontra os repositórios, faz fetch em paralelo e
-   classifica cada um (seguro, problema ou atualizado). Nenhuma escrita.
+1. ``scan_and_analyze`` — encontra os repositórios, atualiza as referências
+   remotas com fetch e classifica cada um. Não altera worktree nem commits
+   locais, mas o fetch escreve metadados dentro de ``.git``.
 2. ``execute_plan`` — recebe apenas os repositórios em estado seguro e
    executa pull fast-forward / push. Deve ser chamado só depois de o
    usuário revisar o plano e confirmar.
@@ -15,6 +16,7 @@ from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from datetime import datetime
+from pathlib import Path
 
 from .cache import save_cache
 from .config import Config
@@ -27,13 +29,18 @@ from .gitrepo import (
     pull_ff_only,
     push,
 )
+from .scanner import find_git_repos, resolve_scan_roots
 
 # Dias da semana em português para a mensagem de commit automático.
 _WEEKDAYS_PT = (
-    "segunda-feira", "terça-feira", "quarta-feira", "quinta-feira",
-    "sexta-feira", "sábado", "domingo",
+    "segunda-feira",
+    "terça-feira",
+    "quarta-feira",
+    "quinta-feira",
+    "sexta-feira",
+    "sábado",
+    "domingo",
 )
-from .scanner import find_git_repos, resolve_scan_roots
 
 
 @dataclass
@@ -47,10 +54,7 @@ class SyncPlan:
 
     @property
     def total(self) -> int:
-        return (
-            len(self.up_to_date) + len(self.to_pull)
-            + len(self.to_push) + len(self.problems)
-        )
+        return len(self.up_to_date) + len(self.to_pull) + len(self.to_push) + len(self.problems)
 
     @property
     def has_actions(self) -> bool:
@@ -64,10 +68,7 @@ class SyncPlan:
         repositório atrás do remoto criaria divergência, então esses
         continuam sendo apenas reportados.
         """
-        return [
-            s for s in self.problems
-            if s.state is RepoState.DIRTY and s.behind == 0
-        ]
+        return [s for s in self.problems if s.state is RepoState.DIRTY and s.behind == 0]
 
 
 @dataclass
@@ -83,7 +84,7 @@ class ActionResult:
 def scan_and_analyze(
     config: Config,
     on_progress: Callable[[str], None] | None = None,
-    cached_repos: list | None = None,
+    cached_repos: list[Path] | None = None,
 ) -> SyncPlan:
     """Encontra repositórios e classifica todos, com fetch em paralelo.
 
@@ -132,10 +133,7 @@ def build_auto_commit_message(when: datetime | None = None) -> str:
     """
     when = when or datetime.now()
     weekday = _WEEKDAYS_PT[when.weekday()]
-    return (
-        "chore: commit automático do Fetch All — "
-        f"{weekday}, {when.strftime('%d/%m/%Y %H:%M')}"
-    )
+    return f"chore: commit automático do Fetch All — {weekday}, {when.strftime('%d/%m/%Y %H:%M')}"
 
 
 def execute_auto_commits(
@@ -151,20 +149,52 @@ def execute_auto_commits(
     notify = on_progress or (lambda _msg: None)
     results: list[ActionResult] = []
     for status in candidates:
-        ok, msg = commit_all(status, message)
-        results.append(ActionResult(status, "commit", ok, msg))
+        fresh = analyze_repo(status.path)
+        if fresh.state is not RepoState.DIRTY or fresh.behind:
+            results.append(_changed_state_result(status, fresh, "commit"))
+            notify(f"commit {status.name}: FALHOU")
+            continue
+
+        ok, msg = commit_all(fresh, message)
+        results.append(ActionResult(fresh, "commit", ok, msg))
         notify(f"commit {status.name}: {'ok' if ok else 'FALHOU'}")
         if not ok:
             continue
-        ok, msg = pull_ff_only(status)
-        results.append(ActionResult(status, "pull", ok, msg))
+
+        before_pull = analyze_repo(status.path)
+        if before_pull.state is not RepoState.NEEDS_PUSH:
+            results.append(_changed_state_result(fresh, before_pull, "pull"))
+            notify(f"pull {status.name}: FALHOU")
+            continue
+        ok, msg = pull_ff_only(before_pull)
+        results.append(ActionResult(before_pull, "pull", ok, msg))
         notify(f"pull {status.name}: {'ok' if ok else 'FALHOU'}")
         if not ok:
             continue
-        ok, msg = push(status)
-        results.append(ActionResult(status, "push", ok, msg))
+
+        before_push = analyze_repo(status.path)
+        if before_push.state is not RepoState.NEEDS_PUSH:
+            results.append(_changed_state_result(fresh, before_push, "push"))
+            notify(f"push {status.name}: FALHOU")
+            continue
+        ok, msg = push(before_push)
+        results.append(ActionResult(before_push, "push", ok, msg))
         notify(f"push {status.name}: {'ok' if ok else 'FALHOU'}")
     return results
+
+
+def _changed_state_result(
+    planned: RepoStatus,
+    current: RepoStatus,
+    action: str,
+) -> ActionResult:
+    """Registra uma ação recusada porque o estado mudou após a revisão."""
+    detail = f" ({current.detail})" if current.detail else ""
+    message = (
+        "estado mudou desde a revisão do plano: "
+        f"{planned.state.value} → {current.state.value}{detail}; nenhuma ação executada"
+    )
+    return ActionResult(current, action, False, message)
 
 
 def execute_plan(
@@ -175,11 +205,21 @@ def execute_plan(
     notify = on_progress or (lambda _msg: None)
     results: list[ActionResult] = []
     for status in plan.to_pull:
-        ok, message = pull_ff_only(status)
-        results.append(ActionResult(status, "pull", ok, message))
+        fresh = analyze_repo(status.path)
+        if fresh.state is not RepoState.NEEDS_PULL:
+            results.append(_changed_state_result(status, fresh, "pull"))
+            notify(f"pull {status.name}: FALHOU")
+            continue
+        ok, message = pull_ff_only(fresh)
+        results.append(ActionResult(fresh, "pull", ok, message))
         notify(f"pull {status.name}: {'ok' if ok else 'FALHOU'}")
     for status in plan.to_push:
-        ok, message = push(status)
-        results.append(ActionResult(status, "push", ok, message))
+        fresh = analyze_repo(status.path)
+        if fresh.state is not RepoState.NEEDS_PUSH:
+            results.append(_changed_state_result(status, fresh, "push"))
+            notify(f"push {status.name}: FALHOU")
+            continue
+        ok, message = push(fresh)
+        results.append(ActionResult(fresh, "push", ok, message))
         notify(f"push {status.name}: {'ok' if ok else 'FALHOU'}")
     return results

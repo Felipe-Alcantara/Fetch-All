@@ -8,20 +8,36 @@ por conter caminhos locais da máquina.
 
 from __future__ import annotations
 
+import re
 from datetime import datetime
 from pathlib import Path
 
 from .config import PROJECT_ROOT
 from .gitrepo import RepoStatus
+from .security import redact_sensitive_text
 from .syncer import ActionResult, SyncPlan
 
 RUNS_DIR = PROJECT_ROOT / "passadas"
 
 
 def _repo_line(status: RepoStatus, extra: str = "") -> str:
-    branch = f" (`{status.branch}`)" if status.branch else ""
-    suffix = f" — {extra}" if extra else ""
-    return f"- `{status.path}`{branch}{suffix}"
+    path = _inline_code(str(status.path))
+    branch = f" ({_inline_code(status.branch)})" if status.branch else ""
+    suffix = f" — {_single_line(extra)}" if extra else ""
+    return f"- {path}{branch}{suffix}"
+
+
+def _single_line(value: str) -> str:
+    """Impede que texto externo injete novas linhas no Markdown."""
+    return " ".join(redact_sensitive_text(value).splitlines())
+
+
+def _inline_code(value: str) -> str:
+    """Formata texto local como código mesmo quando ele contém crases."""
+    clean = _single_line(value)
+    runs = [len(match.group()) for match in re.finditer(r"`+", clean)]
+    fence = "`" * (max(runs, default=0) + 1)
+    return f"{fence} {clean} {fence}"
 
 
 def build_run_report(
@@ -89,8 +105,10 @@ def build_run_report(
     else:
         lines.append("- Nenhum push nesta passada.")
 
-    pending = len(unresolved) + len(failed) + (
-        len(plan.to_pull) + len(plan.to_push) if not executed else 0
+    pending = (
+        len(unresolved)
+        + len(failed)
+        + (len(plan.to_pull) + len(plan.to_push) if not executed else 0)
     )
     lines += ["", "## Pendências", ""]
     if pending:

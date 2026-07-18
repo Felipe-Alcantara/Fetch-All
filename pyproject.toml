@@ -1,0 +1,31 @@
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+extend-exclude = ["Padrão de qualidade - Felixo System Design"]
+
+[tool.ruff.lint]
+select = ["B", "E4", "E7", "E9", "F", "I", "PERF", "PIE", "RUF", "S", "SIM", "UP"]
+ignore = [
+    "PERF203", # clareza do tratamento de ImportError vale mais neste loop curto
+    "RUF001",  # a interface usa símbolos Unicode intencionais
+    "S603",    # subprocessos usam listas de argumentos e nunca shell=True
+    "S607",    # git/mount são ferramentas do PATH verificadas pelo aplicativo
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "S108"]
+
+[tool.coverage.run]
+branch = true
+source = ["fetchall", "start_app"]
+# A TUI coordena entradas visuais; suas regras delegadas ficam na lógica testada.
+omit = ["fetchall/menu.py", "fetchall/report.py", "start_app.py"]
+
+[tool.coverage.report]
+fail_under = 80
+show_missing = true
+skip_covered = true
+exclude_also = [
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+]

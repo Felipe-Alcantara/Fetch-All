@@ -1,203 +1,306 @@
 # 🔄 Fetch All
 
+<div align="center">
+
 ![Python](https://img.shields.io/badge/Python-3.10+-blue?style=for-the-badge&logo=python&logoColor=white)
 ![SO](https://img.shields.io/badge/Windows%20%C2%B7%20Linux%20%C2%B7%20macOS-suportados-blueviolet?style=for-the-badge)
 ![Git](https://img.shields.io/badge/Git-obrigat%C3%B3rio-F05032?style=for-the-badge&logo=git&logoColor=white)
-![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)
-![Testes](https://img.shields.io/badge/Testes-unittest-brightgreen?style=for-the-badge)
+[![Qualidade](https://img.shields.io/github/actions/workflow/status/Felipe-Alcantara/Fetch-All/quality.yml?branch=main&style=for-the-badge&label=qualidade)](https://github.com/Felipe-Alcantara/Fetch-All/actions/workflows/quality.yml)
+![Licença](https://img.shields.io/badge/Licen%C3%A7a-MIT-green?style=for-the-badge)
 
-Sincronizador seguro de repositórios git locais: varre todos os discos do
-computador, faz fetch em tudo e sincroniza apenas o que é 100% seguro —
-avisando antes de qualquer ação.
+**Sincronize repositórios Git locais com revisão prévia e ações conservadoras.**
+
+[🚀 Como usar](#-como-usar) • [⭐ Segurança](#-sincronização-segura-) • [📖 Documentação](#-documentação) • [🤝 Contribuir](#-contribuições)
+
+</div>
 
 ---
 
 ## 📋 Índice
 
-- [Sobre o Projeto](#-sobre-o-projeto)
-- [Segurança em primeiro lugar](#-segurança-em-primeiro-lugar)
-- [Estrutura do Projeto](#-estrutura-do-projeto)
-- [Funcionalidades](#-funcionalidades)
-- [Como Usar](#-como-usar)
-- [Testes](#-testes)
-- [Limitações](#-limitações)
-- [Ideias para quem quiser contribuir](#-ideias-para-quem-quiser-contribuir)
-- [Licença](#-licença)
-- [Autor](#-autor)
+- [🛡️ **Sincronização segura**](#-sincronização-segura-) ⭐ **DESTAQUE**
+- [📋 Sobre o Projeto](#-sobre-o-projeto)
+- [📁 Estrutura do Projeto](#-estrutura-do-projeto)
+- [🚀 Funcionalidades](#-funcionalidades)
+- [📖 Documentação](#-documentação)
+- [🎯 Como Usar](#-como-usar)
+- [📚 Guia Rápido](#-guia-rápido)
+- [🔧 Funcionalidades Técnicas](#-funcionalidades-técnicas)
+- [🧪 Qualidade e Testes](#-qualidade-e-testes)
+- [⚠️ Limitações](#-limitações)
+- [🔒 Segurança](#-segurança)
+- [📝 Licença](#-licença)
+- [👤 Autor](#-autor)
+- [🤝 Contribuições](#-contribuições)
+
+---
+
+## 🛡️ Sincronização segura ⭐
+
+> **REVISE O PLANO COMPLETO ANTES DE QUALQUER PULL, PUSH OU COMMIT.**
+
+O Fetch All faz `fetch`, classifica cada repositório e apresenta as ações
+possíveis. Pull, push e commit automático exigem confirmação explícita e o
+estado é revalidado imediatamente antes da escrita.
+
+### 💡 Por que usar?
+
+- **🎯 Conservador:** pull sempre usa `--ff-only`; históricos divergentes não são mesclados.
+- **🔍 Auditável:** cada passada gera um relatório Markdown local.
+- **🛡️ Defensivo:** conflitos, worktrees sujos e planos obsoletos são preservados.
+- **💻 Portável:** detecta discos locais em Windows, Linux e macOS.
 
 ---
 
 ## 📋 Sobre o Projeto
 
-Quem tem muitos projetos git espalhados pelo computador conhece o medo de
-trocar de máquina sem ter certeza de que tudo subiu para o remoto. O
-**Fetch All** resolve isso: varre automaticamente **todos os discos locais**
-em busca de repositórios git, faz `fetch` em todos em paralelo e monta um
-plano de sincronização — `pull --ff-only` nos que estão atrás do remoto e
-`push` nos que estão à frente — que só é executado após a sua confirmação.
+Quem mantém muitos projetos Git espalhados pelo computador pode perder a visão
+do que ainda não chegou ao remoto. O **Fetch All** encontra repositórios nos
+discos locais, atualiza suas referências remotas e monta um plano seguro para o
+branch atual de cada um.
 
----
-
-## 🛡 Segurança em primeiro lugar
-
-Repositórios em qualquer estado arriscado são **apenas reportados, nunca
-tocados**:
-
-- mudanças não commitadas ou arquivos não rastreados;
-- histórico divergente entre local e remoto (exigiria merge/rebase);
-- merge, rebase ou cherry-pick em andamento;
-- sem remoto, branch sem upstream ou HEAD desanexado;
-- erro de fetch (rede, credenciais, remoto removido).
-
-O pull é sempre `--ff-only`: nunca cria commit de merge nem sobrescreve nada.
+O `fetch` da fase de análise atualiza metadados dentro de `.git`, mas não altera
+o worktree nem cria commits locais. As operações que mudam o branch ou o remoto
+só acontecem depois da revisão e confirmação no menu.
 
 ---
 
 ## 📁 Estrutura do Projeto
 
-```
-start_app.py          # porta de entrada — menu interativo
-fetchall/
-  config.py           # leitura/gravação do config.json
-  cache.py            # cache da última varredura (execuções rápidas)
-  scanner.py          # detecção de discos e varredura por repositórios
-  gitrepo.py          # análise de estado e ações git (fetch/pull/push)
-  syncer.py           # orquestração: plano em duas fases (analisar → executar)
-  report.py           # tabelas e painéis no terminal (rich)
-  runlog.py           # relatório Markdown de cada passada (pasta passadas/)
-tests/                # suíte de testes (repositórios git temporários, offline)
-passadas/             # um .md por execução (gerado; ignorado pelo git)
+```text
+Fetch-All/
+├── 📁 .github/workflows/       # Integração contínua em Python 3.10, 3.12 e 3.13
+├── 📁 docs/                    # Contratos e evidências de qualidade
+├── 📁 fetchall/                # Aplicação modular
+│   ├── environment.py          # Bootstrap e diagnóstico do ambiente
+│   ├── menu.py                 # Interface TUI e delegação de ações
+│   ├── scanner.py              # Descoberta de discos e repositórios
+│   ├── gitrepo.py              # Análise e operações Git conservadoras
+│   ├── syncer.py               # Orquestração e revalidação do plano
+│   ├── config.py               # Configuração validada
+│   ├── cache.py                # Cache da última varredura
+│   ├── runlog.py               # Relatório Markdown de cada passada
+│   ├── security.py             # Redação de credenciais e tokens
+│   └── storage.py              # Persistência atômica
+├── 📁 scripts/                 # Ferramentas internas de manutenção
+├── 📁 tests/                   # Testes unitários, integração Git e regressão
+├── start_app.py                # Porta de entrada única do programa
+├── pyproject.toml              # Ruff e cobertura
+├── requirements.lock           # Dependências de execução com hashes
+├── requirements-dev.lock       # Ferramentas de qualidade com hashes
+├── IA.md                       # Memória técnica e estado atual
+├── README.md                   # Este arquivo
+└── LICENSE                     # Licença MIT
 ```
 
 ---
 
 ## 🚀 Funcionalidades
 
-### 🔍 Varredura automática e paralela (`fetchall/scanner.py`)
-Detecta todos os discos locais (fixos e removíveis) e encontra qualquer
-repositório git, incluindo aninhados — com **todos os discos varridos ao
-mesmo tempo** (uma thread por disco; a varredura é limitada por I/O, não
-por CPU). Pastas pesadas ou de sistema (`node_modules`, `Windows`, caches
-de assistentes de IA, bibliotecas Steam etc.) são puladas por padrão, com
-lista de exclusões editável.
+### 🔍 Varredura automática (`fetchall/scanner.py`)
 
-Funciona em qualquer sistema operacional:
+**`scanner.py`**
 
-- **Windows** — enumera as unidades pela API do sistema (rede e CD/DVD
-  ficam de fora); em Python anterior ao 3.12 usa um fallback equivalente.
-- **Linux/macOS/BSD** — cada disco/partição local montado (`/`, `/mnt/…`,
-  `/media/…`, `/Volumes/…`) vira uma raiz de varredura própria, varrida em
-  paralelo com as demais; pontos de montagem virtuais (`/proc`, `/sys`,
-  snaps, tmpfs…) e de rede (NFS, SMB, sshfs…) são pulados, lidos de
-  `/proc/mounts` ou do comando `mount`. Discos NTFS montados via ntfs-3g
-  continuam dentro da varredura.
+- Detecta discos fixos e removíveis locais.
+- Pula montagens virtuais, de rede e diretórios pesados configurados.
+- Varre discos distintos em paralelo e deduplica raízes aninhadas.
+- Exemplo: `[/, /mnt/dados]` → `[ProjetoA, ProjetoB]`.
 
-### ⚡ Cache de varredura (`fetchall/cache.py`)
-Após a primeira varredura completa, as execuções seguintes podem usar a
-varredura **rápida**: analisa direto os repositórios já conhecidos, sem
-percorrer os discos de novo. Repositórios apagados são descartados na hora.
+### 🔀 Sincronização conservadora (`fetchall/gitrepo.py`, `fetchall/syncer.py`)
 
-### 🔀 Sincronização em duas fases (`fetchall/syncer.py`)
-Fase 1 só lê (varredura + fetch paralelo + classificação); fase 2 executa
-pulls e pushes — e só roda depois que você revisa o plano e confirma.
+**`gitrepo.py`** e **`syncer.py`**
+
+- Classificam atualizado, pull, push, divergência, conflito e erros.
+- Revalidam o estado imediatamente antes de cada ação.
+- Interrompem apenas o repositório que falhar.
+- Exemplo: `behind=2, worktree limpo` → `pull --ff-only` planejado.
+
+### ⚡ Cache local (`fetchall/cache.py`)
+
+**`cache.py`**
+
+- Reutiliza repositórios conhecidos em uma varredura rápida.
+- Descarta entradas que não existem mais.
+- Invalida o cache quando as raízes mudam.
+- Exemplo: `scan_cache.json válido` → análise direta sem percorrer o disco.
 
 ### 📌 Commit automático opcional (`fetchall/syncer.py`)
-Quando a **única** pendência de um repositório é commitar as mudanças
-(sujo, mas sem estar atrás do remoto), o programa oferece criar um commit
-de tudo com mensagem padronizada — ex.:
-`chore: commit automático do Fetch All — sábado, 05/07/2026 14:30` —
-seguido de pull `--ff-only` e push. Sempre com confirmação explícita;
-repositórios sujos que também estão atrás do remoto ficam de fora
-(commitar criaria divergência) e qualquer falha interrompe aquele
-repositório sem tocar em mais nada.
+
+**`execute_auto_commits()`**
+
+- Aceita somente worktrees sujos que não estejam atrás do remoto.
+- Mostra candidatos e mensagem antes da confirmação.
+- Executa commit, pull fast-forward e push em sequência protegida.
+- Exemplo: `DIRTY, behind=0` → candidato; `DIRTY, behind=1` → preservado.
 
 ### 📝 Registro de passadas (`fetchall/runlog.py`)
-Cada execução da sincronização gera um arquivo Markdown em `passadas/`
-(nomeado pela data e hora) registrando o que foi feito, o que não foi
-feito, o que foi salvo no remoto e o que ficou pendente — um histórico
-auditável de todas as passadas. A pasta é ignorada pelo git por conter
-caminhos locais.
+
+**`runlog.py`**
+
+- Registra ações concluídas, recusadas e pendências.
+- Neutraliza novas linhas e Markdown vindos de mensagens externas.
+- Mantém caminhos locais fora do controle de versão.
+- Exemplo: uma execução → `passadas/AAAA-MM-DD_HH-MM-SS.md`.
+
+---
+
+## 📖 Documentação
+
+- 📖 [Contrato e checklist de qualidade](docs/QUALITY.md)
+- 📖 [Como contribuir](CONTRIBUTING.md)
+- 📖 [Política de segurança](SECURITY.md)
+- 📖 [Contexto operacional para IA](IA.md)
+- 📖 [Licença MIT](LICENSE)
 
 ---
 
 ## 🎯 Como Usar
 
-Forma mais simples — abre o menu interativo onde você instala, configura e inicia:
+### Opção 1: menu interativo — recomendado
+
+#### Instalação
+
+Não é necessário instalar dependências manualmente. Na primeira execução, o
+bootstrap oferece criar `.venv` e instalar o lockfile homologado.
+
+#### Execução
 
 ```bash
+# Abra a porta de entrada única do programa
 python start_app.py
 ```
 
-Se o comando `python` não existir no sistema, use:
+Se o sistema não disponibilizar `python`, use:
 
 ```bash
+# Nome comum do interpretador em Linux e macOS
 python3 start_app.py
 ```
 
-No menu você escolhe: **Iniciar/Rodar** (varre e sincroniza), **Instalar/Setup**
-(cria/atualiza `.venv` e instala `rich` + `questionary`), **Configurar**
-(restringir a varredura a pastas específicas e editar exclusões) e **Status/Sair**.
+O menu oferece **Iniciar/Rodar**, **Instalar/Setup**, **Configurar**, **Status**
+e **Sair**. A configuração de caminhos, exclusões e paralelismo acontece no
+próprio menu, sem edição manual obrigatória.
 
 ### Requisitos
 
-- Windows, Linux ou macOS
-- Python 3.10+ (o menu confere a versão e avisa com mensagem clara)
-- Git instalado e no `PATH`, com credenciais já configuradas (o programa
-  nunca pede senha; repositórios sem credencial aparecem como erro de
-  fetch). Se o git não for encontrado, o menu mostra como instalar no seu
-  sistema (winget, apt, brew…)
-- Em distribuições com Python gerenciado pelo sistema (PEP 668), use a opção
-  **Instalar/Setup** do menu; ela prepara um `.venv` local em vez de forçar
-  instalação global com pip.
-
-### Configuração
-
-Por padrão não é preciso configurar nada: com a lista de caminhos vazia, o
-programa varre todos os discos locais. Preferências ficam em `config.json`
-e o cache em `scan_cache.json`, ambos na raiz e ignorados pelo git por
-conterem caminhos locais.
+- Windows, Linux ou macOS.
+- Python 3.10 ou mais recente.
+- Git disponível no `PATH`, com credenciais já configuradas.
+- Rede acessível aos remotos durante `fetch`, pull ou push.
 
 ---
 
-## 🧪 Testes
+## 📚 Guia Rápido
 
-A suíte roda offline (os "remotos" são repositórios bare em pastas
-temporárias) e cobre a classificação de estados, o scanner, a configuração
-e o cache:
+### Para Iniciantes
+
+1. Rode `python start_app.py`.
+2. Escolha **Status** para conferir Python, Git e ambiente local.
+3. Use **Configurar** se quiser limitar a busca a uma pasta.
+4. Escolha **Iniciar** e leia o plano antes de confirmar qualquer ação.
+
+### Para Desenvolvedores
+
+1. Crie `.venv`.
+2. Instale `requirements.lock` e `requirements-dev.lock` em comandos separados.
+3. Rode `.venv/bin/python scripts/check_quality.py` antes de contribuir.
+4. Atualize README e `IA.md` quando o comportamento mudar.
+
+### Para Uso Prático
+
+- **Antes de trocar de computador:** use varredura completa.
+- **Na rotina diária:** use o cache e escolha varredura rápida.
+- **Ao encontrar divergência:** resolva manualmente; o Fetch All não cria merge.
+
+---
+
+## 🔧 Funcionalidades Técnicas
+
+- **`analyze_repo(path)`**: faz fetch opcional e classifica o branch atual.
+- **`scan_and_analyze(config)`**: descobre, analisa em paralelo e monta o plano.
+- **`execute_plan(plan)`**: revalida e executa apenas pulls/pushes ainda seguros.
+- **`atomic_write_text(path, content)`**: persiste configuração e cache sem escrita parcial.
+- **`redact_sensitive_text(text)`**: mascara credenciais e formatos conhecidos de token.
+
+Configurações locais ficam em `config.json`; o cache fica em
+`scan_cache.json`. Ambos são ignorados pelo Git porque contêm caminhos da
+máquina. O programa não usa banco de dados, servidor web ou arquivo `.env`.
+
+---
+
+## 🧪 Qualidade e Testes
+
+Prepare o ambiente de desenvolvimento:
 
 ```bash
-python3 -m unittest discover -s tests
+# Crie o ambiente virtual
+python -m venv .venv
+
+# Instale primeiro a aplicação e depois as ferramentas, ambos com hashes
+.venv/bin/python -m pip install -r requirements.lock
+.venv/bin/python -m pip install -r requirements-dev.lock
+
+# Execute a mesma validação usada pela integração contínua
+.venv/bin/python scripts/check_quality.py
 ```
 
----
-
-## ⚠ Limitações
-
-- Sincroniza apenas o branch atual de cada repositório.
-- Não cria upstream automaticamente (`push -u`); branches sem upstream são
-  apenas reportados.
-- Repositórios novos só aparecem na varredura completa (o cache é um atalho).
+No Windows, substitua `.venv/bin/python` por `.venv\Scripts\python.exe`. O
+comando valida compilação, dependências, Ruff, formatação, links internos,
+testes com cobertura de branches e vulnerabilidades conhecidas. A cobertura
+mínima automatizada da lógica não visual é 80%; a TUI fica fora apenas da
+métrica percentual, e as regras que ela aciona permanecem cobertas.
 
 ---
 
-## 🤝 Ideias para quem quiser contribuir
+## ⚠️ Limitações
 
-- Exportar o registro das passadas também em JSON, para consumo por outras ferramentas.
-- Paralelizar a varredura dentro de um mesmo disco (hoje o paralelismo é um
-  disco/partição por thread; sub-árvores de um mesmo disco são sequenciais).
-- Agendamento periódico da sincronização.
-- Suporte a criar upstream automaticamente (`push -u`) mediante confirmação.
+- **Branch atual:** somente o branch em checkout é sincronizado.
+- **Upstream:** branches sem upstream são reportados; não há `push -u` automático.
+- **Cache:** repositórios novos exigem uma varredura completa.
+- **Subárvores:** o paralelismo da varredura é por disco, não por pasta do mesmo disco.
+- **Rede:** a auditoria e operações Git dependem dos serviços externos correspondentes.
 
 ---
 
-## 📄 Licença
+## 🔒 Segurança
 
-MIT — veja [LICENSE](LICENSE).
+⚠️ **IMPORTANTE:** revise a lista de arquivos antes de autorizar commit
+automático. Ele usa `git add -A` e inclui arquivos não rastreados.
+
+- Comandos externos usam listas de argumentos e nunca `shell=True`.
+- `GIT_TERMINAL_PROMPT=0` impede prompts de credencial ocultos durante a análise.
+- Mensagens mascaram credenciais em URLs, parâmetros sensíveis e tokens conhecidos.
+- Pull usa `--ff-only`; conflitos e divergências exigem intervenção manual.
+- Configuração externa é validada e persistida atomicamente.
+
+Relate problemas sensíveis conforme [SECURITY.md](SECURITY.md).
+
+---
+
+## 📝 Licença
+
+Este projeto está sob a licença MIT — veja [LICENSE](LICENSE).
+
+---
 
 ## 👤 Autor
 
-**Felipe Martin** — projeto pessoal para administrar dezenas de repositórios
-git antes de trocar de máquina, seguindo o padrão de qualidade
-*Felixo System Design*.
+**Felipe Martin**
 
-⭐ Se este projeto te ajudou, deixe uma estrela no GitHub!
+- GitHub: [@Felipe-Alcantara](https://github.com/Felipe-Alcantara)
+- Repositório: [Fetch All](https://github.com/Felipe-Alcantara/Fetch-All)
+
+---
+
+## 🤝 Contribuições
+
+Contribuições são bem-vindas. Consulte [CONTRIBUTING.md](CONTRIBUTING.md) para:
+
+- reportar bugs com reprodução objetiva;
+- propor melhorias de segurança ou portabilidade;
+- expandir formatos de relatório;
+- melhorar testes e documentação.
+
+---
+
+⭐ Se o Fetch All foi útil, considere dar uma estrela no GitHub!

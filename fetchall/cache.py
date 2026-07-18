@@ -15,6 +15,7 @@ from datetime import datetime
 from pathlib import Path
 
 from .config import PROJECT_ROOT
+from .storage import atomic_write_text
 
 CACHE_PATH = PROJECT_ROOT / "scan_cache.json"
 
@@ -29,9 +30,7 @@ class ScanCache:
 
     def valid_repos(self) -> list[Path]:
         """Repositórios do cache que ainda existem no disco."""
-        return [
-            Path(repo) for repo in self.repos if (Path(repo) / ".git").exists()
-        ]
+        return [Path(repo) for repo in self.repos if (Path(repo) / ".git").exists()]
 
     def matches_roots(self, roots: list[str]) -> bool:
         """O cache só vale se os caminhos varridos forem os mesmos."""
@@ -44,12 +43,20 @@ def load_cache() -> ScanCache | None:
         return None
     try:
         data = json.loads(CACHE_PATH.read_text(encoding="utf-8"))
+        if not isinstance(data, dict):
+            return None
+        roots = data["roots"]
+        repos = data["repos"]
+        if not isinstance(roots, list) or not all(isinstance(item, str) for item in roots):
+            return None
+        if not isinstance(repos, list) or not all(isinstance(item, str) for item in repos):
+            return None
         return ScanCache(
             scanned_at=datetime.fromisoformat(data["scanned_at"]),
-            roots=list(data["roots"]),
-            repos=list(data["repos"]),
+            roots=roots,
+            repos=repos,
         )
-    except (json.JSONDecodeError, KeyError, ValueError, OSError):
+    except (json.JSONDecodeError, KeyError, TypeError, ValueError, OSError):
         return None  # cache inválido é o mesmo que cache ausente
 
 
@@ -60,6 +67,7 @@ def save_cache(roots: list[str], repos: list[Path]) -> None:
         "roots": roots,
         "repos": [str(repo) for repo in repos],
     }
-    CACHE_PATH.write_text(
-        json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+    atomic_write_text(
+        CACHE_PATH,
+        json.dumps(data, indent=2, ensure_ascii=False) + "\n",
     )

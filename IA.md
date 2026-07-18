@@ -3,6 +3,20 @@
 Linha do tempo técnica do projeto. Adicione registros datados; não apague
 nem reescreva entradas antigas.
 
+## Estado atual (resumo vivo)
+
+Última atualização: [2026-07-18]
+
+- **Fase:** aplicação CLI funcional e conforme aos guias de qualidade aplicáveis.
+- **Arquitetura:** entrada mínima em `start_app.py`; ambiente, TUI, domínio Git,
+  orquestração, persistência e apresentação vivem em módulos separados.
+- **Qualidade:** 76 testes, 87% de cobertura de branches da lógica não visual,
+  CI multi-versão, locks com hashes, Ruff e auditoria dos dois locks
+  automatizados por `scripts/check_quality.py`.
+- **Em andamento:** nenhuma mudança estrutural pendente nesta entrega.
+- **Riscos abertos:** comportamento específico de Windows/macOS é coberto por
+  testes simulados; a CI hospedada executará após o próximo push.
+
 ## Objetivo
 
 Programa que varre o computador inteiro em busca de repositórios git,
@@ -10,13 +24,30 @@ faz fetch em todos e sincroniza (pull/push) apenas os que estão em estado
 seguro, reportando qualquer problema antes de agir — para garantir que
 todos os projetos subiram ao remoto antes de uma troca de máquina.
 
+## Metas e milestones
+
+- [2026-07-03] ✅ Sincronização conservadora com revisão prévia.
+- [2026-07-06] ✅ Varredura portátil e paralela por disco.
+- [2026-07-18] ✅ Automação local de qualidade e CI multi-versão.
+- [2026-07-18] ✅ Conformidade integral com os guias aplicáveis do padrão.
+
 ## Stack e convenções
 
-- Python (stdlib para toda a lógica; `rich` + `questionary` só para a TUI).
+- Python 3.10+ (stdlib para a lógica; Rich 15.0.0 + Questionary 2.1.1 na TUI).
 - Git via `subprocess` (`git -C <repo> …`), sem bibliotecas de binding.
 - Estrutura: lógica no pacote `fetchall/`, entrada única em `start_app.py`
   (menu obrigatório do Felixo System Design).
 - Configuração em `config.json` na raiz, ignorado pelo git (caminhos locais).
+- Dependências de execução e desenvolvimento são resolvidas em lockfiles com
+  hashes; atualizações são intencionais e acompanhadas de `pip-audit`.
+- Commits seguem Conventional Commits; documentação muda junto do comportamento.
+
+## Integrações e serviços externos
+
+- Git e remotos configurados em cada repositório; prompts interativos de
+  credencial são desativados. Nenhum token é armazenado pelo Fetch All.
+- GitHub Actions executa a matriz de qualidade. Não há banco, API própria,
+  telemetria, serviço de deploy nem arquivo `.env`.
 
 ## Registros
 
@@ -218,3 +249,57 @@ todos os projetos subiram ao remoto antes de uma troca de máquina.
 - **Validação:** 2 testes novos (poda só onde a pasta existe, com usuário
   sem CloudStorage e `/Users` inexistente) + teste do darwin atualizado;
   suíte completa com 55 testes passando.
+
+### 2026-07-18 — Padronização integral de qualidade e segurança defensiva
+
+- **Auditoria do repositório:** adotados `pyproject.toml`, `.editorconfig`,
+  dependências de execução fixadas com hashes em `requirements.lock`, dependências
+  de desenvolvimento pinadas, política de segurança, guia de contribuição e CI
+  em Python 3.10/3.12/3.13. O script reutilizável
+  `scripts/check_quality.py` concentra compilação, Ruff, testes, cobertura e
+  `pip-audit`; o setup do menu agora instala as versões fixadas e considera
+  uma versão incompatível como dependência ausente.
+- **Correção de segurança temporal:** o estado de cada repositório é analisado
+  novamente imediatamente antes de pull, push e commit automático. Se o estado
+  mudou depois que o plano foi exibido, a escrita é recusada e registrada como
+  falha segura. Pull continua `--ff-only`, e timeouts/erros de processo nas
+  ações passam a virar resultados previsíveis em vez de interromper o menu.
+- **Precisão do contrato:** a documentação deixou de chamar a fase de análise
+  de “somente leitura”. `git fetch` não altera worktree nem commits locais, mas
+  atualiza referências remotas e outros metadados em `.git` antes da revisão;
+  a confirmação explícita se aplica às ações pull, push e commit automático.
+- **Proteção de dados:** mensagens externas mascaram credenciais embutidas em
+  URLs, parâmetros sensíveis e formatos conhecidos de token do GitHub antes de
+  chegar à tela ou ao Markdown. O relatório também neutraliza quebras de linha
+  e crases vindas de caminhos/mensagens, evitando injeção de estrutura.
+- **Entradas e persistência:** `config.json` passou a validar a raiz, listas de
+  texto e `max_workers` (1–256); cache com tipos inválidos é descartado. Config
+  e cache são gravados por arquivo temporário + substituição, reduzindo risco
+  de corrupção em interrupções.
+- **Estados Git:** rebase por `rebase-apply`/`rebase-merge` e revert em andamento
+  entram na classificação de conflito; falhas de `remote`, `status` e contagem
+  de commits deixam de poder ser interpretadas como estado seguro.
+- **Validação real:** 68 testes passaram, inclusive novos casos de plano
+  obsoleto, rebase, timeout, segredos, esquema de configuração e cache; Ruff e
+  compilação passaram; cobertura de branches da lógica não visual ficou em
+  81% (mínimo automatizado: 80%); `pip-audit` não encontrou vulnerabilidades
+  conhecidas nas dependências fixadas.
+
+### 2026-07-18 — Conclusão da conformidade integral
+
+- **Arquitetura final:** o antigo `start_app.py` monolítico foi reduzido à
+  porta de entrada; bootstrap e validação do ambiente foram movidos para
+  `environment.py`, e a interface interativa passou a viver em `menu.py`. O
+  domínio e as integrações permanecem independentes da apresentação.
+- **Menu completo:** a configuração interativa agora cobre caminhos, exclusões
+  personalizadas e paralelismo, além das ações obrigatórias Iniciar,
+  Instalar/Setup, Configurar, Status e Sair.
+- **Reprodutibilidade:** os locks de execução e desenvolvimento incluem versões
+  transitivas e hashes. A automação local e a CI auditam ambos.
+- **Rastreabilidade:** `docs/QUALITY.md` relaciona cada guia aplicável ao código
+  e registra por que guias de funcionalidades inexistentes estão fora do
+  escopo. README, política de segurança e contribuição refletem o fluxo final.
+- **Evidência final:** `scripts/check_quality.py` passou integralmente no Python
+  3.12: 76 testes, cobertura de branches de 87%, Ruff, compilação, links e
+  consistência do ambiente sem falhas; `pip-audit` não encontrou
+  vulnerabilidades conhecidas nos locks de execução ou desenvolvimento.

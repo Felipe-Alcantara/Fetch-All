@@ -6,11 +6,16 @@
 
 # Arquivos locais (contêm caminhos desta máquina)
 config.json
+/.config.json.*.tmp
 scan_cache.json
+/.scan_cache.json.*.tmp
 passadas/
 
 # Python
 __pycache__/
 *.pyc
+.coverage
+coverage.xml
+.ruff_cache/
 .venv/
 Padrão de qualidade - Felixo System Design/
