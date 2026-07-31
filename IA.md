@@ -303,3 +303,19 @@ todos os projetos subiram ao remoto antes de uma troca de máquina.
   3.12: 76 testes, cobertura de branches de 87%, Ruff, compilação, links e
   consistência do ambiente sem falhas; `pip-audit` não encontrou
   vulnerabilidades conhecidas nos locks de execução ou desenvolvimento.
+
+### 2026-07-31 — Correção: mudanças não commitadas escondidas atrás de "sem upstream"
+
+- **Bug corrigido:** quando um repositório estava num branch sem upstream
+  configurado (ex.: `feat/uso-publico` sem `push -u`) e também tinha arquivos
+  modificados/não rastreados, `analyze_repo` classificava como `NO_UPSTREAM`
+  e o `detail` só mencionava a falta de upstream — as mudanças no working
+  tree ficavam invisíveis na linha resumo do relatório. Parecia que o Fetch
+  All estava "ignorando" o repositório, quando na verdade só omitia parte do
+  diagnóstico (o repositório continuava listado em "problemas", sem nenhuma
+  ação automática — comportamento conservador correto).
+- **Correção:** `detail` de `NO_UPSTREAM` agora soma a contagem de arquivos
+  sujos quando eles existem, em `fetchall/gitrepo.py`.
+- **Teste:** `test_no_upstream_with_dirty_files_reports_both` em
+  `tests/test_gitrepo.py`, cobrindo branch sem upstream com arquivo não
+  commitado.

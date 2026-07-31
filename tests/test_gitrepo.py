@@ -85,6 +85,15 @@ class GitRepoStateTests(unittest.TestCase):
         status = analyze_repo(self.clone, do_fetch=False)
         self.assertIs(status.state, RepoState.NO_UPSTREAM)
 
+    def test_no_upstream_with_dirty_files_reports_both(self) -> None:
+        """Sem upstream não deve esconder que também há mudanças não commitadas."""
+        git(self.clone, "checkout", "-b", "sem-upstream")
+        (self.clone / "sujo.txt").write_text("não commitado", encoding="utf-8")
+        status = analyze_repo(self.clone, do_fetch=False)
+        self.assertIs(status.state, RepoState.NO_UPSTREAM)
+        self.assertEqual(len(status.dirty_files), 1)
+        self.assertIn("arquivo(s) modificados", status.detail)
+
     def test_detached_head(self) -> None:
         head = git(self.clone, "rev-parse", "HEAD").stdout.strip()
         git(self.clone, "checkout", head)

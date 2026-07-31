@@ -172,12 +172,15 @@ def _analyze(repo: Path, do_fetch: bool) -> RepoStatus:
 
     upstream = _git(repo, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}")
     if upstream.returncode != 0:
+        detail = f"branch '{branch}' não rastreia nenhum branch remoto"
+        if dirty_files:
+            detail += f"; {len(dirty_files)} arquivo(s) modificados/não rastreados"
         return RepoStatus(
             repo,
             RepoState.NO_UPSTREAM,
             branch=branch,
             dirty_files=dirty_files,
-            detail=f"branch '{branch}' não rastreia nenhum branch remoto",
+            detail=detail,
         )
 
     counts = _git(repo, "rev-list", "--left-right", "--count", "@{u}...HEAD")
