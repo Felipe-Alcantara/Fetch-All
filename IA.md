@@ -319,3 +319,30 @@ todos os projetos subiram ao remoto antes de uma troca de máquina.
 - **Teste:** `test_no_upstream_with_dirty_files_reports_both` em
   `tests/test_gitrepo.py`, cobrindo branch sem upstream com arquivo não
   commitado.
+
+### 2026-08-04 — Verificação do fluxo Git no macOS
+
+- **Verificação solicitada:** a implementação de `fetch`, `pull` e `push` foi
+  revisada e validada com a suíte completa; o fluxo continua conservador:
+  `fetch --all --prune`, `pull --ff-only` e `push` somente para branch à frente
+  com upstream configurado.
+- **Evidência local:** neste checkout, `origin` está configurado para fetch e
+  push, `main` rastreia `origin/main` e a análise real retornou `Atualizado`,
+  `ahead=0`, `behind=0` após o fetch.
+- **Validação:** `scripts/check_quality.py` passou com 77 testes, 87% de
+  cobertura de branches, Ruff, links, compilação e `pip-audit` sem
+  vulnerabilidades conhecidas. Repositórios sem upstream, sujos, divergentes,
+  destacados ou com erro de fetch permanecem intencionalmente sem ação
+  automática; isso explica casos que ficam não sincronizados e são listados
+  como pendência para intervenção manual.
+
+### 2026-08-04 — Auditoria adicional de funções específicas do macOS
+
+- **Resultado:** o terminal disponível é Linux, portanto não foi possível
+  afirmar execução nativa em um Mac. Os caminhos específicos foram validados
+  por testes com `sys.platform == "darwin"`: parser do `mount`, volumes locais,
+  poda de `/System/Volumes`, exclusão exata de `~/Library/CloudStorage`,
+  bootstrap e relançamento por subprocesso.
+- **Validação:** 14 testes específicos de macOS/varredura e sincronização
+  passaram; a suíte completa anterior também passou. A confirmação final de
+  permissões, File Provider e credenciais depende de executar em um Mac real.
